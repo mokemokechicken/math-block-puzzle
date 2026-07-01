@@ -11,7 +11,10 @@ const {
   createBoardMarkup,
   formatSelectionPreview,
   getFloatingEquationPoint,
-  getSuccessAnimationDurations
+  getSuccessAnimationDurations,
+  nextBoardSeed,
+  clearScheduledBoardRefresh,
+  scheduleBoardRefresh
 } = globalThis.MathBlockPuzzleApp;
 const { getLevelConfig } = globalThis.MathBlockPuzzleConfig;
 
@@ -74,4 +77,62 @@ test("success animation durations follow reduced motion preference", () => {
   assert.deepEqual(getSuccessAnimationDurations(), { highlight: 520, floating: 1200 });
 
   globalThis.matchMedia = originalMatchMedia;
+});
+
+test("next board seed increases monotonically for board refresh", () => {
+  const first = nextBoardSeed();
+  const second = nextBoardSeed();
+
+  assert.equal(second, first + 1);
+});
+
+test("scheduling a board refresh clears the previous refresh timer", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const cleared = [];
+  let nextTimerId = 1;
+
+  globalThis.setTimeout = () => nextTimerId++;
+  globalThis.clearTimeout = (timerId) => {
+    cleared.push(timerId);
+  };
+
+  try {
+    scheduleBoardRefresh({ innerHTML: "" }, 2, 100);
+    scheduleBoardRefresh({ innerHTML: "" }, 2, 100);
+
+    assert.deepEqual(cleared, [1]);
+  } finally {
+    clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("queued stale board refresh callbacks do not render over newer state", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const callbacks = [];
+  const root = { innerHTML: "" };
+
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+
+  try {
+    scheduleBoardRefresh(root, 2, 100);
+    scheduleBoardRefresh(root, 2, 100);
+
+    callbacks[0]();
+    assert.equal(root.innerHTML, "");
+
+    callbacks[1]();
+    assert.match(root.innerHTML, /data-game-panel/);
+  } finally {
+    clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });

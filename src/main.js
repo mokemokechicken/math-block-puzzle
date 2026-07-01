@@ -1,6 +1,9 @@
 (function initializeApp(global) {
   let activeController = null;
   let successAnimationToken = 0;
+  let boardSeed = 20260701;
+  let boardRefreshTimer = null;
+  let boardRefreshToken = 0;
 
   function getDependencies() {
     const { MathBlockPuzzleBoard, MathBlockPuzzleConfig, MathBlockPuzzleInput, MathBlockPuzzleRules } = global;
@@ -28,6 +31,11 @@
       guaranteedAnswers: generated.guaranteedAnswers,
       allAnswers: generated.allAnswers
     };
+  }
+
+  function nextBoardSeed() {
+    boardSeed += 1;
+    return boardSeed;
   }
 
   function formatSelectionPreview(selection, level) {
@@ -214,6 +222,41 @@
     return floating;
   }
 
+  function markClearingCells(selectedCells) {
+    for (const cell of selectedCells) {
+      cell.element?.classList.add("is-clearing");
+    }
+  }
+
+  function clearScheduledBoardRefresh() {
+    boardRefreshToken += 1;
+
+    if (boardRefreshTimer !== null) {
+      global.clearTimeout?.(boardRefreshTimer);
+      boardRefreshTimer = null;
+    }
+
+    return boardRefreshToken;
+  }
+
+  function scheduleBoardRefresh(root, levelId, delay = 900) {
+    const token = clearScheduledBoardRefresh();
+
+    boardRefreshTimer = global.setTimeout?.(() => {
+      if (token !== boardRefreshToken) {
+        return;
+      }
+
+      boardRefreshTimer = null;
+      renderInitialScreen(root, {
+        levelId,
+        seed: nextBoardSeed()
+      });
+    }, delay) ?? null;
+
+    return boardRefreshTimer;
+  }
+
   function setupBoardInput(root, state) {
     if (typeof root.querySelector !== "function") {
       return null;
@@ -250,6 +293,9 @@
 
         if (result.valid) {
           playSuccessAnimation(boardRoot, selection, result.expression);
+          markClearingCells(selection);
+          boardRoot.classList.add("is-resolving");
+          scheduleBoardRefresh(root, state.level.id, getSuccessAnimationDurations().floating);
         }
 
         markSelectedCells(boardRoot, []);
@@ -266,6 +312,8 @@
     if (!root) {
       throw new Error("Missing #game-root mount point");
     }
+
+    clearScheduledBoardRefresh();
 
     if (activeController) {
       activeController.destroy();
@@ -296,6 +344,7 @@
 
   global.MathBlockPuzzleApp = {
     createGameState,
+    nextBoardSeed,
     formatSelectionPreview,
     createBoardMarkup,
     createInitialMarkup,
@@ -305,6 +354,9 @@
     prefersReducedMotion,
     getSuccessAnimationDurations,
     playSuccessAnimation,
+    markClearingCells,
+    clearScheduledBoardRefresh,
+    scheduleBoardRefresh,
     setupBoardInput,
     renderInitialScreen
   };
