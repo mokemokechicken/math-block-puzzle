@@ -1,35 +1,98 @@
 (function initializeApp(global) {
-  function createPreviewCells() {
-    return Array.from({ length: 9 }, (_item, index) => {
-      const row = Math.floor(index / 3);
-      const col = index % 3;
-      const value = index + 1;
+  let activeController = null;
 
-      return { row, col, value, id: `${row}:${col}` };
-    });
+  function getDependencies() {
+    const { MathBlockPuzzleBoard, MathBlockPuzzleConfig, MathBlockPuzzleInput, MathBlockPuzzleRules } = global;
+
+    if (!MathBlockPuzzleBoard || !MathBlockPuzzleConfig || !MathBlockPuzzleInput || !MathBlockPuzzleRules) {
+      throw new Error("Math block puzzle dependencies are not loaded");
+    }
+
+    return {
+      board: MathBlockPuzzleBoard,
+      config: MathBlockPuzzleConfig,
+      input: MathBlockPuzzleInput,
+      rules: MathBlockPuzzleRules
+    };
   }
 
-  function createInitialMarkup() {
-    const cells = createPreviewCells();
+  function createGameState(options = {}) {
+    const { board, config } = getDependencies();
+    const level = config.getLevelConfig(options.levelId ?? 2);
+    const generated = board.generateBoard(level, { seed: options.seed ?? 20260701 });
 
+    return {
+      level,
+      board: generated.board,
+      guaranteedAnswers: generated.guaranteedAnswers,
+      allAnswers: generated.allAnswers
+    };
+  }
+
+  function formatSelectionPreview(selection, level) {
+    const { rules, config } = getDependencies();
+
+    if (selection.length === 0) {
+      return "ブロックをなぞって式を作ろう";
+    }
+
+    const values = selection.map((cell) => cell.value);
+
+    if (selection.length === 1) {
+      return `${values[0]}`;
+    }
+
+    if (selection.length === 2) {
+      const operator = level.operations.includes(config.OPERATIONS.subtract) ? "±" : "+";
+      return `${values[0]} ${operator} ${values[1]} = ?`;
+    }
+
+    const result = rules.validateSelection(selection, level);
+
+    if (result.valid) {
+      return result.expression;
+    }
+
+    return `${values[0]} ? ${values[1]} = ${values[2]}`;
+  }
+
+  function createBoardMarkup(state) {
     return `
-      <section class="status-panel" aria-label="ゲーム状態">
-        <div>
-          <p class="status-label">準備中</p>
-          <p class="status-text" data-status-text>数字ブロックを縦か横に 3 個なぞれます。</p>
-        </div>
-      </section>
-      <section class="board-placeholder" aria-label="盤面プレビュー" data-board-preview>
-        ${cells.map((cell) => `
+      <section class="game-board" aria-label="数字ブロック盤面" data-game-board style="--board-size: ${state.level.board.width}">
+        ${state.board.flat().map((cell) => `
           <button
-            class="placeholder-block"
+            class="number-block"
             type="button"
             data-cell-id="${cell.id}"
             data-row="${cell.row}"
             data-col="${cell.col}"
             data-value="${cell.value}"
+            aria-label="${cell.value}"
           >${cell.value}</button>
         `).join("")}
+      </section>
+    `;
+  }
+
+  function createInitialMarkup(options = {}) {
+    const state = createGameState(options);
+
+    return `
+      <section class="game-panel" data-game-panel>
+        <div class="game-toolbar" aria-label="ゲーム状態">
+          <div>
+            <p class="status-label">${state.level.name}</p>
+            <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
+          </div>
+          <div class="answer-count" aria-label="盤面の正解候補数">
+            <span>${state.allAnswers.length}</span>
+            <small>こ見つかる</small>
+          </div>
+        </div>
+        <div class="equation-preview" aria-live="polite" data-expression-preview>
+          ブロックをなぞって式を作ろう
+        </div>
+        ${createBoardMarkup(state)}
       </section>
     `;
   }
@@ -58,16 +121,23 @@
     }
   }
 
-  function setupInputPreview(root) {
+  function setText(element, text) {
+    if (element) {
+      element.textContent = text;
+    }
+  }
+
+  function setupBoardInput(root, state) {
     if (typeof root.querySelector !== "function") {
       return null;
     }
 
-    const input = global.MathBlockPuzzleInput;
-    const boardRoot = root.querySelector("[data-board-preview]");
+    const { input, rules } = getDependencies();
+    const boardRoot = root.querySelector("[data-game-board]");
     const statusText = root.querySelector("[data-status-text]");
+    const expressionPreview = root.querySelector("[data-expression-preview]");
 
-    if (!input || !boardRoot) {
+    if (!boardRoot) {
       return null;
     }
 
@@ -82,43 +152,64 @@
       getCellFromEvent,
       onSelectionChange: (selection) => {
         markSelectedCells(boardRoot, selection);
-
-        if (statusText) {
-          statusText.textContent = `${selection.length} 個選択中`;
-        }
+        setText(statusText, `${selection.length} 個選択中`);
+        setText(expressionPreview, formatSelectionPreview(selection, state.level));
       },
       onSelectionComplete: (selection) => {
-        markSelectedCells(boardRoot, []);
+        const result = rules.validateSelection(selection, state.level);
 
-        if (statusText) {
-          statusText.textContent = `${selection.length} 個のブロックを選びました`;
-        }
+        markSelectedCells(boardRoot, []);
+        setText(expressionPreview, formatSelectionPreview(selection, state.level));
+        setText(statusText, result.valid ? `正解: ${result.expression}` : "もう一度なぞってみよう");
       },
       onSelectionCancel: () => {
         markSelectedCells(boardRoot, []);
-
-        if (statusText) {
-          statusText.textContent = "選択をキャンセルしました";
-        }
+        setText(statusText, "選択をキャンセルしました");
+        setText(expressionPreview, "ブロックをなぞって式を作ろう");
       }
     });
   }
 
-  function renderInitialScreen(root) {
+  function renderInitialScreen(root, options = {}) {
     if (!root) {
       throw new Error("Missing #game-root mount point");
     }
 
-    root.innerHTML = createInitialMarkup();
-    setupInputPreview(root);
+    if (activeController) {
+      activeController.destroy();
+      activeController = null;
+    }
+
+    const state = createGameState(options);
+    root.innerHTML = `
+      <section class="game-panel" data-game-panel>
+        <div class="game-toolbar" aria-label="ゲーム状態">
+          <div>
+            <p class="status-label">${state.level.name}</p>
+            <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
+          </div>
+          <div class="answer-count" aria-label="盤面の正解候補数">
+            <span>${state.allAnswers.length}</span>
+            <small>こ見つかる</small>
+          </div>
+        </div>
+        <div class="equation-preview" aria-live="polite" data-expression-preview>
+          ブロックをなぞって式を作ろう
+        </div>
+        ${createBoardMarkup(state)}
+      </section>
+    `;
+    activeController = setupBoardInput(root, state);
   }
 
   global.MathBlockPuzzleApp = {
-    createPreviewCells,
+    createGameState,
+    formatSelectionPreview,
+    createBoardMarkup,
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
-    setupInputPreview,
+    setupBoardInput,
     renderInitialScreen
   };
 

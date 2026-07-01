@@ -59,6 +59,24 @@ h1 {
   gap: 16px;
 }
 
+.game-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.game-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 88px;
+  padding: 16px 18px;
+  border: 1px solid rgba(95, 111, 134, 0.22);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+}
+
 .status-panel {
   display: flex;
   align-items: center;
@@ -82,6 +100,46 @@ h1 {
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.7;
+}
+
+.answer-count {
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.answer-count span {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.answer-count small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.equation-preview {
+  min-height: 58px;
+  display: grid;
+  place-items: center;
+  padding: 12px 16px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.game-board {
+  display: grid;
+  grid-template-columns: repeat(var(--board-size), minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 440px);
+  touch-action: none;
+  user-select: none;
 }
 
 .board-placeholder {
@@ -109,6 +167,38 @@ h1 {
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
+.number-block {
+  appearance: none;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 8px;
+  background: var(--block-a);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.55rem;
+  font-weight: 800;
+  box-shadow: 0 7px 16px rgba(27, 39, 66, 0.12);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.number-block:nth-child(3n + 2) {
+  background: var(--block-b);
+}
+
+.number-block:nth-child(3n) {
+  background: var(--block-c);
+}
+
+.number-block.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
+  transform: translateY(-2px);
+}
+
 .placeholder-block:nth-child(3n + 2) {
   background: var(--block-b);
 }
@@ -131,5 +221,17 @@ h1 {
 
   .status-panel {
     min-height: 78px;
+  }
+
+  .game-toolbar {
+    align-items: start;
+  }
+
+  .equation-preview {
+    font-size: 1.1rem;
+  }
+
+  .number-block {
+    font-size: 1.25rem;
   }
 }
