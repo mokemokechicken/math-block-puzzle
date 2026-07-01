@@ -14,7 +14,10 @@ npm run build
 npm test
 ```
 
+ブラウザでの確認観点は [手動 QA チェックリスト](docs/qa/manual-checklist.md) にまとめます。
+
 ## ドキュメント
 
 - [ゲームコンセプト](docs/concept.md)
+- [手動 QA チェックリスト](docs/qa/manual-checklist.md)
 - `docs/dev/` 以下に feature ごとの要件・設計メモを置きます。

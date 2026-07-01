@@ -21,6 +21,8 @@ npm run build
 npm test
 ```
 
+表示や操作に関わる変更では、[docs/qa/manual-checklist.md](docs/qa/manual-checklist.md) の該当項目も確認する。
+
 ## docs/dev
 
 feature ごとに `docs/dev/{feature_name}/requirements.md` と `docs/dev/{feature_name}/design.md` を作成する。
