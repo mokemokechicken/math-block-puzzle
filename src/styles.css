@@ -134,6 +134,7 @@ h1 {
 }
 
 .game-board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--board-size), minmax(0, 1fr));
   gap: 8px;
@@ -197,6 +198,62 @@ h1 {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
   transform: translateY(-2px);
+}
+
+.number-block.is-correct {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.22), 0 14px 28px rgba(22, 163, 74, 0.2);
+  transform: scale(1.04);
+}
+
+.floating-equation {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 900;
+  box-shadow: 0 12px 30px rgba(27, 39, 66, 0.2);
+  animation: float-equation 1200ms ease-out forwards;
+}
+
+@keyframes float-equation {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -22%) scale(0.86);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  72% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -94%) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .number-block,
+  .placeholder-block {
+    transition-duration: 80ms;
+  }
+
+  .floating-equation {
+    animation-duration: 240ms;
+    transition-duration: 80ms;
+  }
 }
 
 .placeholder-block:nth-child(3n + 2) {

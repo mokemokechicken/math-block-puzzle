@@ -1,5 +1,6 @@
 (function initializeApp(global) {
   let activeController = null;
+  let successAnimationToken = 0;
 
   function getDependencies() {
     const { MathBlockPuzzleBoard, MathBlockPuzzleConfig, MathBlockPuzzleInput, MathBlockPuzzleRules } = global;
@@ -127,6 +128,92 @@
     }
   }
 
+  function getFloatingEquationPoint(boardRoot, selectedCells) {
+    const boardRect = boardRoot.getBoundingClientRect?.();
+    const elements = selectedCells
+      .map((cell) => cell.element)
+      .filter((element) => element && typeof element.getBoundingClientRect === "function");
+
+    if (!boardRect || elements.length === 0) {
+      return { x: 50, y: 50 };
+    }
+
+    const centers = elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2 - boardRect.left,
+        y: rect.top + rect.height / 2 - boardRect.top
+      };
+    });
+
+    return {
+      x: centers.reduce((sum, point) => sum + point.x, 0) / centers.length,
+      y: centers.reduce((sum, point) => sum + point.y, 0) / centers.length
+    };
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+  }
+
+  function getSuccessAnimationDurations() {
+    if (prefersReducedMotion()) {
+      return {
+        highlight: 180,
+        floating: 240
+      };
+    }
+
+    return {
+      highlight: 520,
+      floating: 1200
+    };
+  }
+
+  function playSuccessAnimation(boardRoot, selectedCells, expression) {
+    if (!boardRoot || !global.document) {
+      return null;
+    }
+
+    const token = String(successAnimationToken += 1);
+    const durations = getSuccessAnimationDurations();
+
+    for (const cell of selectedCells) {
+      cell.element?.classList.add("is-correct");
+
+      if (cell.element?.dataset) {
+        cell.element.dataset.correctToken = token;
+      }
+    }
+
+    const point = getFloatingEquationPoint(boardRoot, selectedCells);
+    const floating = global.document.createElement("div");
+    floating.className = "floating-equation";
+    floating.textContent = expression;
+    floating.style.left = `${point.x}px`;
+    floating.style.top = `${point.y}px`;
+    boardRoot.append(floating);
+
+    global.setTimeout?.(() => {
+      floating.remove();
+    }, durations.floating);
+
+    global.setTimeout?.(() => {
+      for (const cell of selectedCells) {
+        if (!cell.element) {
+          continue;
+        }
+
+        if (cell.element.dataset?.correctToken === token) {
+          cell.element.classList.remove("is-correct");
+          delete cell.element.dataset.correctToken;
+        }
+      }
+    }, durations.highlight);
+
+    return floating;
+  }
+
   function setupBoardInput(root, state) {
     if (typeof root.querySelector !== "function") {
       return null;
@@ -158,9 +245,14 @@
       onSelectionComplete: (selection) => {
         const result = rules.validateSelection(selection, state.level);
 
-        markSelectedCells(boardRoot, []);
         setText(expressionPreview, formatSelectionPreview(selection, state.level));
         setText(statusText, result.valid ? `正解: ${result.expression}` : "もう一度なぞってみよう");
+
+        if (result.valid) {
+          playSuccessAnimation(boardRoot, selection, result.expression);
+        }
+
+        markSelectedCells(boardRoot, []);
       },
       onSelectionCancel: () => {
         markSelectedCells(boardRoot, []);
@@ -209,6 +301,10 @@
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
+    getFloatingEquationPoint,
+    prefersReducedMotion,
+    getSuccessAnimationDurations,
+    playSuccessAnimation,
     setupBoardInput,
     renderInitialScreen
   };
