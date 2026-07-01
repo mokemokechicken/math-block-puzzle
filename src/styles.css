@@ -1,0 +1,318 @@
+:root {
+  color-scheme: light;
+  --page-bg: #f4f7fb;
+  --panel-bg: #ffffff;
+  --ink: #172033;
+  --muted: #5f6f86;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+  --block-a: #fef3c7;
+  --block-b: #dbeafe;
+  --block-c: #dcfce7;
+  --shadow: 0 18px 42px rgba(27, 39, 66, 0.16);
+  font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page-bg);
+  color: var(--ink);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.game-stage {
+  width: min(100%, 720px);
+}
+
+.game-header {
+  margin-bottom: 18px;
+}
+
+.game-kicker {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.8rem);
+  line-height: 1.08;
+}
+
+.game-root {
+  display: grid;
+  gap: 16px;
+}
+
+.game-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.game-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 88px;
+  padding: 16px 18px;
+  border: 1px solid rgba(95, 111, 134, 0.22);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+}
+
+.status-panel {
+  display: flex;
+  align-items: center;
+  min-height: 88px;
+  padding: 18px;
+  border: 1px solid rgba(95, 111, 134, 0.22);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+}
+
+.status-label {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.status-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.answer-count {
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.answer-count span {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.answer-count small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.equation-preview {
+  min-height: 58px;
+  display: grid;
+  place-items: center;
+  padding: 12px 16px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.game-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--board-size), minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 440px);
+  touch-action: none;
+  user-select: none;
+}
+
+.game-board.is-resolving {
+  pointer-events: none;
+}
+
+.board-placeholder {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 360px);
+  touch-action: none;
+  user-select: none;
+}
+
+.placeholder-block {
+  appearance: none;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 8px;
+  background: var(--block-a);
+  color: var(--ink);
+  font-size: 1.8rem;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(27, 39, 66, 0.12);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.number-block {
+  appearance: none;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 8px;
+  background: var(--block-a);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.55rem;
+  font-weight: 800;
+  box-shadow: 0 7px 16px rgba(27, 39, 66, 0.12);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.number-block:nth-child(3n + 2) {
+  background: var(--block-b);
+}
+
+.number-block:nth-child(3n) {
+  background: var(--block-c);
+}
+
+.number-block.is-hint-source {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 9px 18px rgba(146, 64, 14, 0.14);
+}
+
+.number-block.is-hint-answer {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18), 0 9px 18px rgba(30, 64, 175, 0.14);
+}
+
+.number-block.is-hint-line {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.16), 0 9px 18px rgba(91, 33, 182, 0.14);
+}
+
+.number-block.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
+  transform: translateY(-2px);
+}
+
+.number-block.is-correct {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.22), 0 14px 28px rgba(22, 163, 74, 0.2);
+  transform: scale(1.04);
+}
+
+.number-block.is-clearing {
+  opacity: 0;
+  transform: scale(0.72);
+}
+
+.floating-equation {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 900;
+  box-shadow: 0 12px 30px rgba(27, 39, 66, 0.2);
+  animation: float-equation 1200ms ease-out forwards;
+}
+
+@keyframes float-equation {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -22%) scale(0.86);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  72% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -94%) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .number-block,
+  .placeholder-block {
+    transition-duration: 80ms;
+  }
+
+  .floating-equation {
+    animation-duration: 240ms;
+    transition-duration: 80ms;
+  }
+}
+
+.placeholder-block:nth-child(3n + 2) {
+  background: var(--block-b);
+}
+
+.placeholder-block:nth-child(3n) {
+  background: var(--block-c);
+}
+
+.placeholder-block.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    align-items: start;
+    padding: 18px;
+  }
+
+  .status-panel {
+    min-height: 78px;
+  }
+
+  .game-toolbar {
+    align-items: start;
+  }
+
+  .equation-preview {
+    font-size: 1.1rem;
+  }
+
+  .number-block {
+    font-size: 1.25rem;
+  }
+}
