@@ -16,6 +16,7 @@ test("index.html loads the initial app assets", () => {
   assert.match(html, /id="app"/);
   assert.match(html, /\.\/src\/styles\.css/);
   assert.match(html, /\.\/src\/hints\.js/);
+  assert.match(html, /\.\/src\/audio\.js/);
   assert.match(html, /\.\/src\/main\.js/);
   assert.match(html, /viewport-fit=cover/);
   assert.doesNotMatch(html, /type="module"/);

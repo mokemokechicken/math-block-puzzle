@@ -10,12 +10,14 @@ import "../src/main.js";
 const {
   createGameState,
   createBoardMarkup,
+  createGamePanelMarkup,
   formatSelectionPreview,
   getFloatingEquationPoint,
   getSuccessAnimationDurations,
   nextBoardSeed,
   clearScheduledBoardRefresh,
   scheduleBoardRefresh,
+  scheduleBoardRefill,
   applyHintStage,
   createHintController
 } = globalThis.MathBlockPuzzleApp;
@@ -67,16 +69,18 @@ function createHintFixture() {
 }
 
 test("game state creates a generated board for the selected level", () => {
-  const state = createGameState({ levelId: 2, seed: 2 });
+  const state = createGameState({ levelId: 5, seed: 5 });
 
-  assert.equal(state.level.id, 2);
+  assert.equal(state.level.id, 5);
   assert.equal(state.board.length, 5);
   assert.equal(state.board[0].length, 5);
+  assert.equal(state.correctCount, 0);
+  assert.equal(state.level.clearAnswerCount, 5);
   assert.equal(state.allAnswers.length >= state.guaranteedAnswers.length, true);
 });
 
 test("board markup exposes cell ids and values for input wiring", () => {
-  const state = createGameState({ levelId: 2, seed: 2 });
+  const state = createGameState({ levelId: 5, seed: 5 });
   const markup = createBoardMarkup(state);
 
   assert.match(markup, /data-game-board/);
@@ -86,16 +90,26 @@ test("board markup exposes cell ids and values for input wiring", () => {
 });
 
 test("selection preview shows empty, partial, and complete expressions", () => {
-  const level = getLevelConfig(2);
+  const level = getLevelConfig(4);
 
   assert.equal(formatSelectionPreview([], level), "ブロックをなぞって式を作ろう");
   assert.equal(formatSelectionPreview([cell(0, 0, 5)], level), "5");
-  assert.equal(formatSelectionPreview([cell(0, 0, 5), cell(0, 1, 7)], level), "5 ± 7 = ?");
+  assert.equal(formatSelectionPreview([cell(0, 0, 5), cell(0, 1, 4)], level), "5 ± 4 = ?");
   assert.equal(formatSelectionPreview([
     cell(0, 0, 5),
-    cell(0, 1, 7),
-    cell(0, 2, 12)
-  ], level), "5 + 7 = 12");
+    cell(0, 1, 4),
+    cell(0, 2, 9)
+  ], level), "5 + 4 = 9");
+});
+
+test("game panel exposes level selection, progress, and audio control", () => {
+  const state = createGameState({ levelId: 1, seed: 1 });
+  const markup = createGamePanelMarkup(state);
+
+  assert.match(markup, /data-level-id="1"/);
+  assert.match(markup, /aria-pressed="true"/);
+  assert.match(markup, /0 \/ 5/);
+  assert.match(markup, /data-audio-toggle/);
 });
 
 test("floating equation point uses selected cell centers relative to board", () => {
@@ -174,6 +188,64 @@ test("queued stale board refresh callbacks do not render over newer state", () =
 
     callbacks[1]();
     assert.match(root.innerHTML, /data-game-panel/);
+  } finally {
+    clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("scheduled board refill keeps progress and replaces board values", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const callbacks = [];
+  const state = createGameState({ levelId: 2, seed: 22 });
+  const root = { innerHTML: "" };
+  const selectedCells = [
+    state.board[0][0],
+    state.board[0][1],
+    state.board[0][2]
+  ];
+
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+
+  try {
+    scheduleBoardRefill(root, { ...state, correctCount: 1 }, selectedCells, 100);
+    callbacks[0]();
+
+    assert.match(root.innerHTML, /1 \/ 5/);
+    assert.match(root.innerHTML, /data-game-board/);
+  } finally {
+    clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("scheduled board refill renders clear state at target count", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const callbacks = [];
+  const state = createGameState({ levelId: 1, seed: 11 });
+  const root = { innerHTML: "" };
+
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+
+  try {
+    scheduleBoardRefill(root, { ...state, correctCount: 5 }, [state.board[0][0]], 100);
+    callbacks[0]();
+
+    assert.match(root.innerHTML, /data-clear-panel/);
+    assert.match(root.innerHTML, /5問できました/);
+    assert.doesNotMatch(root.innerHTML, /data-game-board/);
   } finally {
     clearScheduledBoardRefresh();
     globalThis.setTimeout = originalSetTimeout;

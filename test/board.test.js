@@ -10,6 +10,7 @@ const {
   createSeededRandom,
   generateBoard,
   listLinePlacements,
+  refillCells,
   scanBoardForAnswers
 } = globalThis.MathBlockPuzzleBoard;
 
@@ -40,7 +41,7 @@ test("level 1 board guarantees at least four readable answers", () => {
 
   assert.equal(result.board.length, 4);
   assert.equal(result.board[0].length, 4);
-  assert.equal(values.every((value) => value >= 1 && value <= 18), true);
+  assert.equal(values.every((value) => value >= 1 && value <= 5), true);
   assert.equal(values.includes(0), false);
   assert.equal(result.guaranteedAnswers.length >= 4, true);
   assert.equal(
@@ -51,9 +52,9 @@ test("level 1 board guarantees at least four readable answers", () => {
   );
 });
 
-test("level 3 board can guarantee answers in all directions", () => {
-  const level = getLevelConfig(3);
-  const result = generateBoard(level, { seed: 300 });
+test("master level board can guarantee answers in all directions", () => {
+  const level = getLevelConfig(9);
+  const result = generateBoard(level, { seed: 900 });
   const directionSet = new Set(result.guaranteedAnswers.map((answer) => answer.directionId));
 
   assert.equal(result.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
@@ -79,12 +80,39 @@ test("answer scanner finds known addition and subtraction lines", () => {
   board[1][1].value = 4;
   board[1][2].value = 5;
 
-  const answers = scanBoardForAnswers(board, getLevelConfig(2), ["left-to-right"]);
+  const answers = scanBoardForAnswers(board, getLevelConfig(9), ["left-to-right"]);
 
   assert.deepEqual(
     answers.map((answer) => answer.expression),
     ["5 + 7 = 12", "9 - 4 = 5"]
   );
+});
+
+test("answer scanner filters equations outside the level target", () => {
+  const board = createEmptyBoard(3, 1);
+  board[0][0].value = 5;
+  board[0][1].value = 7;
+  board[0][2].value = 12;
+
+  assert.deepEqual(scanBoardForAnswers(board, getLevelConfig(2), ["left-to-right"]), []);
+  assert.equal(scanBoardForAnswers(board, getLevelConfig(5), ["left-to-right"]).length, 1);
+});
+
+test("refill cells replaces only cleared positions", () => {
+  const generated = generateBoard(2, { seed: 200 });
+  const before = generated.board.map((row) => row.map((cell) => cell.value));
+  const cells = [
+    generated.board[0][0],
+    generated.board[0][1],
+    generated.board[0][2]
+  ];
+  const refilled = refillCells(generated.board, cells, generated.level, { seed: 201 });
+  const after = refilled.board.map((row) => row.map((cell) => cell.value));
+
+  assert.notDeepEqual(after[0].slice(0, 3), before[0].slice(0, 3));
+  assert.deepEqual(after[0].slice(3), before[0].slice(3));
+  assert.deepEqual(after.slice(1), before.slice(1));
+  assert.equal(refilled.board.flat().every((cell) => cell.value >= 1 && cell.value <= 10), true);
 });
 
 test("seeded random produces repeatable values", () => {

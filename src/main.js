@@ -1,11 +1,25 @@
 (function initializeApp(global) {
   let activeController = null;
+  let soundController = null;
   let successAnimationToken = 0;
   let boardSeed = 20260701;
   let boardRefreshTimer = null;
   let boardRefreshToken = 0;
+  const DEFAULT_LEVEL_ID = 1;
   const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
   const HINT_CELL_CLASSES = ["is-hint-source", "is-hint-answer", "is-hint-line"];
+
+  function getSoundController() {
+    if (!soundController && global.MathBlockPuzzleAudio?.createSoundController) {
+      soundController = global.MathBlockPuzzleAudio.createSoundController();
+    }
+
+    return soundController;
+  }
+
+  function playSound(soundType) {
+    getSoundController()?.play(soundType);
+  }
 
   function getDependencies() {
     const {
@@ -37,14 +51,21 @@
 
   function createGameState(options = {}) {
     const { board, config } = getDependencies();
-    const level = config.getLevelConfig(options.levelId ?? 2);
-    const generated = board.generateBoard(level, { seed: options.seed ?? 20260701 });
+    const level = config.getLevelConfig(options.levelId ?? DEFAULT_LEVEL_ID);
+    const generated = options.board ? {
+      board: options.board,
+      guaranteedAnswers: board.scanBoardForAnswers(options.board, level, level.guaranteedDirections),
+      allAnswers: board.scanBoardForAnswers(options.board, level)
+    } : board.generateBoard(level, { seed: options.seed ?? 20260701 });
 
     return {
       level,
       board: generated.board,
       guaranteedAnswers: generated.guaranteedAnswers,
-      allAnswers: generated.allAnswers
+      allAnswers: generated.allAnswers,
+      correctCount: options.correctCount ?? 0,
+      completed: Boolean(options.completed),
+      completionReason: options.completionReason ?? null
     };
   }
 
@@ -98,27 +119,102 @@
     `;
   }
 
-  function createInitialMarkup(options = {}) {
-    const state = createGameState(options);
+  function createLevelSelectorMarkup(state) {
+    const { config } = getDependencies();
 
     return `
-      <section class="game-panel" data-game-panel>
+      <nav class="level-selector" aria-label="レベル選択">
+        ${config.LEVELS.map((level) => `
+          <button
+            class="level-button${level.id === state.level.id ? " is-active" : ""}"
+            type="button"
+            data-level-id="${level.id}"
+            aria-pressed="${level.id === state.level.id ? "true" : "false"}"
+          >
+            <span>Lv ${level.id}</span>
+            <small>${level.shortName}</small>
+          </button>
+        `).join("")}
+      </nav>
+    `;
+  }
+
+  function createAudioToggleMarkup() {
+    const controller = getSoundController();
+    const isMuted = Boolean(controller?.isMuted?.());
+
+    return `
+      <button class="audio-toggle" type="button" data-audio-toggle aria-pressed="${isMuted ? "true" : "false"}">
+        ${isMuted ? "音オフ" : "音オン"}
+      </button>
+    `;
+  }
+
+  function getCompletionMessage(state) {
+    if (state.completionReason === "no-answers") {
+      return "候補をすべて見つけました";
+    }
+
+    return `${state.level.clearAnswerCount}問できました`;
+  }
+
+  function createClearMarkup(state) {
+    const { config } = getDependencies();
+    const hasNextLevel = state.level.id < config.LEVELS.length;
+
+    return `
+      <section class="clear-panel" data-clear-panel>
+        <p class="status-label">クリア</p>
+        <p class="clear-text">${getCompletionMessage(state)}</p>
+        <div class="clear-actions">
+          <button type="button" class="clear-action" data-retry-level>もう一回</button>
+          ${hasNextLevel ? `
+            <button type="button" class="clear-action is-primary" data-next-level="${state.level.id + 1}">
+              次のレベル
+            </button>
+          ` : ""}
+        </div>
+      </section>
+    `;
+  }
+
+  function createGamePanelMarkup(state) {
+    return `
+      <section class="game-panel" data-game-panel data-current-level-id="${state.level.id}">
+        <div class="game-controls">
+          ${createLevelSelectorMarkup(state)}
+          ${createAudioToggleMarkup()}
+        </div>
         <div class="game-toolbar" aria-label="ゲーム状態">
           <div>
             <p class="status-label">${state.level.name}</p>
             <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
           </div>
-          <div class="answer-count" aria-label="盤面の正解候補数">
-            <span>${state.allAnswers.length}</span>
-            <small>こ見つかる</small>
+          <div class="game-counters">
+            <div class="progress-count" aria-label="正解数">
+              <span>${state.correctCount} / ${state.level.clearAnswerCount}</span>
+              <small>正解</small>
+            </div>
+            <div class="answer-count" aria-label="盤面の正解候補数">
+              <span>${state.allAnswers.length}</span>
+              <small>こ見つかる</small>
+            </div>
           </div>
         </div>
-        <div class="equation-preview" aria-live="polite" data-expression-preview>
-          ${DEFAULT_EXPRESSION_PREVIEW}
-        </div>
-        ${createBoardMarkup(state)}
+        ${state.completed ? createClearMarkup(state) : `
+          <div class="equation-preview" aria-live="polite" data-expression-preview>
+            ${DEFAULT_EXPRESSION_PREVIEW}
+          </div>
+          ${createBoardMarkup(state)}
+        `}
       </section>
     `;
+  }
+
+  function createInitialMarkup(options = {}) {
+    const state = createGameState(options);
+
+    return createGamePanelMarkup(state);
   }
 
   function createCellMap(root) {
@@ -196,6 +292,7 @@
       answer,
       expressionPreview,
       statusText,
+      onStageChange = null,
       delays = hints.HINT_STAGE_DELAYS
     } = options;
 
@@ -231,6 +328,7 @@
 
       if (currentStage > hints.HINT_STAGES.none) {
         setText(statusText, "ヒントが光っています");
+        onStageChange?.(currentStage);
       }
     }
 
@@ -406,6 +504,57 @@
     return boardRefreshTimer;
   }
 
+  function completeState(state, completionReason) {
+    return {
+      ...state,
+      completed: true,
+      completionReason
+    };
+  }
+
+  function scheduleBoardRefill(root, state, selectedCells, delay = 900) {
+    const { board } = getDependencies();
+    const token = clearScheduledBoardRefresh();
+    const cellsToRefill = selectedCells.map((cell) => ({
+      row: cell.row,
+      col: cell.col
+    }));
+
+    boardRefreshTimer = global.setTimeout?.(() => {
+      if (token !== boardRefreshToken) {
+        return;
+      }
+
+      boardRefreshTimer = null;
+
+      if (state.correctCount >= state.level.clearAnswerCount) {
+        playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.clear);
+        renderGameState(root, completeState(state, "target"));
+        return;
+      }
+
+      const refilled = board.refillCells(state.board, cellsToRefill, state.level, {
+        seed: nextBoardSeed()
+      });
+      const nextState = {
+        ...state,
+        board: refilled.board,
+        guaranteedAnswers: refilled.guaranteedAnswers,
+        allAnswers: refilled.allAnswers
+      };
+
+      if (nextState.allAnswers.length === 0) {
+        playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.clear);
+        renderGameState(root, completeState(nextState, "no-answers"));
+        return;
+      }
+
+      renderGameState(root, nextState);
+    }, delay) ?? null;
+
+    return boardRefreshTimer;
+  }
+
   function setupBoardInput(root, state) {
     if (typeof root.querySelector !== "function") {
       return null;
@@ -431,13 +580,15 @@
       cellMap,
       answer: hints.chooseHintAnswer(state.allAnswers),
       expressionPreview,
-      statusText
+      statusText,
+      onStageChange: () => playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.hint)
     });
 
     const pointerController = input.createPointerDragController({
       root: boardRoot,
       getCellFromEvent,
       onSelectionChange: (selection) => {
+        getSoundController()?.unlock?.();
         hintController.reset();
         markSelectedCells(boardRoot, selection);
         setText(statusText, `${selection.length} 個選択中`);
@@ -450,12 +601,19 @@
         setText(statusText, result.valid ? `正解: ${result.expression}` : "もう一度なぞってみよう");
 
         if (result.valid) {
+          const nextState = {
+            ...state,
+            correctCount: state.correctCount + 1
+          };
+
+          playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.correct);
           hintController.stop();
           playSuccessAnimation(boardRoot, selection, result.expression);
           markClearingCells(selection);
           boardRoot.classList.add("is-resolving");
-          scheduleBoardRefresh(root, state.level.id, getSuccessAnimationDurations().floating);
+          scheduleBoardRefill(root, nextState, selection, getSuccessAnimationDurations().floating);
         } else {
+          playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.incorrect);
           hintController.reset();
         }
 
@@ -477,11 +635,46 @@
     };
   }
 
-  function renderInitialScreen(root, options = {}) {
-    if (!root) {
-      throw new Error("Missing #game-root mount point");
+  function setupGameControls(root, state) {
+    if (typeof root.querySelectorAll !== "function") {
+      return;
     }
 
+    for (const button of root.querySelectorAll("[data-level-id]")) {
+      button.addEventListener?.("click", () => {
+        renderInitialScreen(root, {
+          levelId: Number(button.dataset.levelId),
+          seed: nextBoardSeed()
+        });
+      });
+    }
+
+    const audioToggle = root.querySelector?.("[data-audio-toggle]");
+
+    audioToggle?.addEventListener?.("click", () => {
+      const controller = getSoundController();
+      const isMuted = controller?.toggleMuted?.() ?? true;
+
+      audioToggle.textContent = isMuted ? "音オフ" : "音オン";
+      audioToggle.setAttribute?.("aria-pressed", isMuted ? "true" : "false");
+    });
+
+    root.querySelector?.("[data-retry-level]")?.addEventListener?.("click", () => {
+      renderInitialScreen(root, {
+        levelId: state.level.id,
+        seed: nextBoardSeed()
+      });
+    });
+
+    root.querySelector?.("[data-next-level]")?.addEventListener?.("click", (event) => {
+      renderInitialScreen(root, {
+        levelId: Number(event.currentTarget.dataset.nextLevel),
+        seed: nextBoardSeed()
+      });
+    });
+  }
+
+  function renderGameState(root, state) {
     clearScheduledBoardRefresh();
 
     if (activeController) {
@@ -489,26 +682,21 @@
       activeController = null;
     }
 
+    root.innerHTML = createGamePanelMarkup(state);
+    setupGameControls(root, state);
+
+    if (!state.completed) {
+      activeController = setupBoardInput(root, state);
+    }
+  }
+
+  function renderInitialScreen(root, options = {}) {
+    if (!root) {
+      throw new Error("Missing #game-root mount point");
+    }
+
     const state = createGameState(options);
-    root.innerHTML = `
-      <section class="game-panel" data-game-panel>
-        <div class="game-toolbar" aria-label="ゲーム状態">
-          <div>
-            <p class="status-label">${state.level.name}</p>
-            <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
-          </div>
-          <div class="answer-count" aria-label="盤面の正解候補数">
-            <span>${state.allAnswers.length}</span>
-            <small>こ見つかる</small>
-          </div>
-        </div>
-        <div class="equation-preview" aria-live="polite" data-expression-preview>
-          ${DEFAULT_EXPRESSION_PREVIEW}
-        </div>
-        ${createBoardMarkup(state)}
-      </section>
-    `;
-    activeController = setupBoardInput(root, state);
+    renderGameState(root, state);
   }
 
   global.MathBlockPuzzleApp = {
@@ -516,6 +704,10 @@
     nextBoardSeed,
     formatSelectionPreview,
     createBoardMarkup,
+    createGamePanelMarkup,
+    createLevelSelectorMarkup,
+    createAudioToggleMarkup,
+    createClearMarkup,
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
@@ -529,7 +721,11 @@
     markClearingCells,
     clearScheduledBoardRefresh,
     scheduleBoardRefresh,
+    scheduleBoardRefill,
+    completeState,
+    setupGameControls,
     setupBoardInput,
+    renderGameState,
     renderInitialScreen
   };
 

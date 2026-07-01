@@ -15,7 +15,7 @@ test("addition selection is valid when the last block is the answer", () => {
     cell(0, 0, 5),
     cell(0, 1, 7),
     cell(0, 2, 12)
-  ], getLevelConfig(1));
+  ], getLevelConfig(5));
 
   assert.equal(result.valid, true);
   assert.equal(result.operation, OPERATIONS.add);
@@ -23,8 +23,8 @@ test("addition selection is valid when the last block is the answer", () => {
   assert.equal(result.expression, "5 + 7 = 12");
 });
 
-test("all four drag directions can be valid from level 1", () => {
-  const level = getLevelConfig(1);
+test("all four drag directions can be valid when the equation matches the level", () => {
+  const level = getLevelConfig(5);
   const selections = [
     [cell(0, 0, 5), cell(0, 1, 7), cell(0, 2, 12)],
     [cell(0, 2, 5), cell(0, 1, 7), cell(0, 0, 12)],
@@ -40,7 +40,7 @@ test("all four drag directions can be valid from level 1", () => {
 });
 
 test("subtraction respects selection order", () => {
-  const level = getLevelConfig(2);
+  const level = getLevelConfig(4);
 
   assert.equal(validateSelection([
     cell(0, 0, 9),

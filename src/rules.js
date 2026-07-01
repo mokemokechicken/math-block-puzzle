@@ -8,6 +8,7 @@
   const {
     OPERATIONS,
     getLevelConfig,
+    isEquationAllowed,
     isOperationAllowed,
     isValidationDirection
   } = config;
@@ -107,7 +108,10 @@
 
     const values = cells.map((cell) => cell.value);
     const matched = evaluateEquation(values, level.operations)
-      .filter((result) => isOperationAllowed(level, result.operation));
+      .filter((result) => (
+        isOperationAllowed(level, result.operation) &&
+        isEquationAllowed(level, values, result.operation)
+      ));
 
     if (matched.length === 0) {
       return invalid("equation_not_satisfied", { directionId, values });

@@ -67,6 +67,68 @@ h1 {
   gap: 14px;
 }
 
+.game-controls {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.level-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.level-button,
+.audio-toggle,
+.clear-action {
+  appearance: none;
+  border: 1px solid rgba(95, 111, 134, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.level-button {
+  display: grid;
+  gap: 2px;
+  min-width: 76px;
+  min-height: 48px;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.level-button span {
+  color: var(--accent);
+  font-size: 0.84rem;
+  line-height: 1;
+}
+
+.level-button small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.level-button.is-active {
+  border-color: var(--accent);
+  background: #ecfeff;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.13);
+}
+
+.audio-toggle {
+  flex: 0 0 auto;
+  min-width: 74px;
+  min-height: 42px;
+  padding: 8px 10px;
+  color: var(--accent);
+}
+
 .game-toolbar {
   display: flex;
   align-items: center;
@@ -84,6 +146,12 @@ h1 {
   min-width: 0;
 }
 
+.game-counters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .status-panel {
   display: flex;
   align-items: center;
@@ -93,6 +161,14 @@ h1 {
   border-radius: 8px;
   background: var(--panel-bg);
   box-shadow: var(--shadow);
+}
+
+.progress-count {
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+  color: #1d4ed8;
+  font-weight: 700;
 }
 
 .status-label {
@@ -124,9 +200,54 @@ h1 {
   line-height: 1;
 }
 
+.progress-count span {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.progress-count small,
 .answer-count small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.clear-panel {
+  display: grid;
+  gap: 14px;
+  min-height: 212px;
+  place-items: center;
+  padding: 26px 18px;
+  border: 1px solid rgba(95, 111, 134, 0.22);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.clear-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.55rem;
+  font-weight: 900;
+}
+
+.clear-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.clear-action {
+  min-width: 116px;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.clear-action.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .equation-preview {
@@ -319,6 +440,25 @@ h1 {
 
   .game-toolbar {
     align-items: start;
+    flex-direction: column;
+  }
+
+  .game-controls {
+    display: grid;
+  }
+
+  .level-button {
+    min-width: calc(33.333% - 4px);
+    padding: 7px 8px;
+  }
+
+  .audio-toggle {
+    justify-self: end;
+  }
+
+  .game-counters {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .equation-preview {

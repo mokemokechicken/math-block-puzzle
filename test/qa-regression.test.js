@@ -18,51 +18,51 @@ function cell(row, col, value) {
 }
 
 test("QA contract: addition and subtraction selections are accepted", () => {
-  const level = getLevelConfig(2);
+  const level = getLevelConfig(4);
 
   const addition = validateSelection([
     cell(0, 0, 5),
-    cell(0, 1, 7),
-    cell(0, 2, 12)
+    cell(0, 1, 4),
+    cell(0, 2, 9)
   ], level);
 
   assert.equal(addition.valid, true);
   assert.equal(addition.operation, OPERATIONS.add);
-  assert.equal(addition.expression, "5 + 7 = 12");
+  assert.equal(addition.expression, "5 + 4 = 9");
 
   const subtraction = validateSelection([
-    cell(1, 0, 12),
-    cell(1, 1, 7),
+    cell(1, 0, 9),
+    cell(1, 1, 4),
     cell(1, 2, 5)
   ], level);
 
   assert.equal(subtraction.valid, true);
   assert.equal(subtraction.operation, OPERATIONS.subtract);
-  assert.equal(subtraction.expression, "12 - 7 = 5");
+  assert.equal(subtraction.expression, "9 - 4 = 5");
 });
 
 test("QA contract: reverse horizontal and upward selections are accepted", () => {
-  const level = getLevelConfig(2);
+  const level = getLevelConfig(4);
 
   const rightToLeft = validateSelection([
-    cell(0, 2, 12),
-    cell(0, 1, 7),
+    cell(0, 2, 9),
+    cell(0, 1, 4),
     cell(0, 0, 5)
   ], level);
 
   assert.equal(rightToLeft.valid, true);
   assert.equal(rightToLeft.directionId, "right-to-left");
-  assert.equal(rightToLeft.expression, "12 - 7 = 5");
+  assert.equal(rightToLeft.expression, "9 - 4 = 5");
 
   const bottomToTop = validateSelection([
     cell(2, 0, 5),
-    cell(1, 0, 7),
-    cell(0, 0, 12)
+    cell(1, 0, 4),
+    cell(0, 0, 9)
   ], level);
 
   assert.equal(bottomToTop.valid, true);
   assert.equal(bottomToTop.directionId, "bottom-to-top");
-  assert.equal(bottomToTop.expression, "5 + 7 = 12");
+  assert.equal(bottomToTop.expression, "5 + 4 = 9");
 });
 
 test("QA contract: level 1 guarantees readable left-to-right or top-to-bottom answers", () => {
@@ -80,6 +80,7 @@ test("QA contract: generated boards never include zero", () => {
     const values = generated.board.flat().map((boardCell) => boardCell.value);
 
     assert.equal(values.includes(0), false);
+    assert.equal(values.every((value) => value >= level.numberRange.min && value <= level.numberRange.max), true);
     assert.equal(values.every((value) => value >= NUMBER_RANGE.min && value <= NUMBER_RANGE.max), true);
   }
 });

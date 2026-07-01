@@ -11,10 +11,11 @@
   }
 
   const {
-    NUMBER_RANGE,
     OPERATIONS,
+    getEquationConstraint,
     getDirection,
-    getLevelConfig
+    getLevelConfig,
+    isEquationAllowed
   } = config;
 
   const { evaluateEquation } = rules;
@@ -95,22 +96,41 @@
     return cells.every((cell) => cell.value === null);
   }
 
+  function randomInRange(random, valueRange) {
+    return randomInt(random, valueRange.min, valueRange.max);
+  }
+
   function createEquation(level, random) {
     const operation = level.operations[randomInt(random, 0, level.operations.length - 1)];
+    const constraint = getEquationConstraint(level, operation);
 
-    if (operation === OPERATIONS.add) {
-      const left = randomInt(random, NUMBER_RANGE.min, NUMBER_RANGE.max - 1);
-      const right = randomInt(random, NUMBER_RANGE.min, NUMBER_RANGE.max - left);
-      return { operation, values: [left, right, left + right] };
+    if (!constraint) {
+      throw new Error(`Missing equation constraint: ${operation}`);
     }
 
-    if (operation === OPERATIONS.subtract) {
-      const answer = randomInt(random, NUMBER_RANGE.min, NUMBER_RANGE.max - 1);
-      const right = randomInt(random, NUMBER_RANGE.min, NUMBER_RANGE.max - answer);
-      return { operation, values: [answer + right, right, answer] };
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (operation === OPERATIONS.add) {
+        const left = randomInRange(random, constraint.left);
+        const right = randomInRange(random, constraint.right);
+        const values = [left, right, left + right];
+
+        if (isEquationAllowed(level, values, operation)) {
+          return { operation, values };
+        }
+      }
+
+      if (operation === OPERATIONS.subtract) {
+        const left = randomInRange(random, constraint.left);
+        const right = randomInRange(random, constraint.right);
+        const values = [left, right, left - right];
+
+        if (isEquationAllowed(level, values, operation)) {
+          return { operation, values };
+        }
+      }
     }
 
-    throw new Error(`Unsupported operation: ${operation}`);
+    throw new Error(`Could not create equation for level ${level.id}`);
   }
 
   function fillLine(cells, values) {
@@ -119,14 +139,35 @@
     });
   }
 
-  function fillRandomNumbers(board, random) {
+  function fillRandomNumbers(board, level, random) {
     for (const row of board) {
       for (const cell of row) {
         if (cell.value === null) {
-          cell.value = randomInt(random, NUMBER_RANGE.min, NUMBER_RANGE.max);
+          cell.value = randomInRange(random, level.numberRange);
         }
       }
     }
+  }
+
+  function refillCells(board, cells, levelInput, options = {}) {
+    const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
+    const random = options.random ?? createSeededRandom(options.seed);
+    const nextBoard = cloneBoard(board);
+
+    for (const cell of cells) {
+      if (!isWithinBoard(nextBoard, cell.row, cell.col)) {
+        throw new Error(`Cell is outside board: ${cell.row}:${cell.col}`);
+      }
+
+      nextBoard[cell.row][cell.col].value = randomInRange(random, level.numberRange);
+    }
+
+    return {
+      board: nextBoard,
+      level,
+      guaranteedAnswers: scanBoardForAnswers(nextBoard, level, level.guaranteedDirections),
+      allAnswers: scanBoardForAnswers(nextBoard, level)
+    };
   }
 
   function scanBoardForAnswers(board, levelInput, directionIds = null) {
@@ -143,6 +184,10 @@
       }
 
       for (const result of evaluateEquation(values, level.operations)) {
+        if (!isEquationAllowed(level, values, result.operation)) {
+          continue;
+        }
+
         answers.push({
           directionId: placement.directionId,
           cells: placement.cells,
@@ -198,7 +243,7 @@
         continue;
       }
 
-      fillRandomNumbers(board, baseRandom);
+      fillRandomNumbers(board, level, baseRandom);
 
       const guaranteedAnswers = scanBoardForAnswers(board, level, level.guaranteedDirections);
 
@@ -222,6 +267,7 @@
     cloneBoard,
     getLineCells,
     listLinePlacements,
+    refillCells,
     scanBoardForAnswers,
     generateBoard
   });

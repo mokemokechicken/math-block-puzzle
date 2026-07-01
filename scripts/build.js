@@ -21,6 +21,7 @@ for (const asset of [
   "./src/board.js",
   "./src/input.js",
   "./src/hints.js",
+  "./src/audio.js",
   "./src/main.js"
 ]) {
   if (!html.includes(asset)) {
