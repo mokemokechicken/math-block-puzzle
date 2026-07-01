@@ -1,0 +1,11 @@
+{
+  "name": "math-block-puzzle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "node scripts/lint.js",
+    "build": "node scripts/build.js",
+    "test": "node --test"
+  }
+}
