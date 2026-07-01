@@ -14,6 +14,7 @@
 
 - 説明、docs、PR 本文は日本語で書く。
 - 作業前に関連する `knowledge/` の文書を確認する。
+- 動作確認や表示確認では、原則として In-App Browser を使う。
 - 恒久的な知識は `knowledge/` に置く。`docs/dev/` は作業中の一時メモに限定し、完了時に削除または `knowledge/` へ反映する。
 - LLM Agent 用 skill の実体は `knowledge/skills/` に置く。`.codex/skills`、`.claude/skills`、`skills` が必要な場合は symlink として扱う。
 

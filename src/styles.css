@@ -147,6 +147,7 @@ h1 {
 .game-board {
   position: relative;
   display: grid;
+  justify-self: center;
   grid-template-columns: repeat(var(--board-size), minmax(0, 1fr));
   gap: 8px;
   width: min(100%, 440px);
@@ -160,6 +161,7 @@ h1 {
 
 .board-placeholder {
   display: grid;
+  justify-self: center;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   width: min(100%, 360px);
