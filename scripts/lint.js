@@ -1,19 +1,36 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const files = [
-  "index.html",
-  "src/main.js",
-  "src/styles.css",
-  "scripts/lint.js",
-  "scripts/build.js",
-  "test/app-foundation.test.js"
-];
+const lintExtensions = new Set([".css", ".html", ".js", ".json", ".md"]);
+const ignoredDirectories = new Set([".git", "node_modules"]);
+
+function collectFiles(directory) {
+  const files = [];
+
+  for (const entry of readdirSync(directory)) {
+    if (ignoredDirectories.has(entry)) {
+      continue;
+    }
+
+    const path = join(directory, entry);
+    const stats = statSync(path);
+
+    if (stats.isDirectory()) {
+      files.push(...collectFiles(path));
+    } else if (lintExtensions.has(path.slice(path.lastIndexOf(".")))) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+const files = collectFiles(process.cwd());
 
 const failures = [];
 
 for (const file of files) {
-  const source = readFileSync(join(process.cwd(), file), "utf8");
+  const source = readFileSync(file, "utf8");
 
   if (source.includes("\t")) {
     failures.push(`${file}: タブ文字を使わずスペースで整形してください`);
