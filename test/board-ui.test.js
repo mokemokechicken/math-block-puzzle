@@ -4,6 +4,7 @@ import "../src/config.js";
 import "../src/rules.js";
 import "../src/board.js";
 import "../src/input.js";
+import "../src/hints.js";
 import "../src/main.js";
 
 const {
@@ -14,12 +15,55 @@ const {
   getSuccessAnimationDurations,
   nextBoardSeed,
   clearScheduledBoardRefresh,
-  scheduleBoardRefresh
+  scheduleBoardRefresh,
+  applyHintStage,
+  createHintController
 } = globalThis.MathBlockPuzzleApp;
 const { getLevelConfig } = globalThis.MathBlockPuzzleConfig;
 
 function cell(row, col, value) {
   return { id: `${row}:${col}`, row, col, value };
+}
+
+function cellElement(cellId) {
+  const classes = new Set();
+
+  return {
+    dataset: { cellId },
+    classList: {
+      add: (className) => classes.add(className),
+      remove: (className) => classes.delete(className),
+      contains: (className) => classes.has(className)
+    }
+  };
+}
+
+function boardRootFor(elements) {
+  return {
+    querySelectorAll: (selector) => (selector === "[data-cell-id]" ? elements : [])
+  };
+}
+
+function createHintFixture() {
+  const ids = ["0:0", "0:1", "0:2"];
+  const elements = ids.map(cellElement);
+  const cells = ids.map((id, index) => ({
+    id,
+    row: 0,
+    col: index,
+    value: [5, 7, 12][index],
+    element: elements[index]
+  }));
+
+  return {
+    boardRoot: boardRootFor(elements),
+    cellMap: new Map(cells.map((hintCell) => [hintCell.id, hintCell])),
+    elements,
+    answer: {
+      cells: cells.map(({ id, row, col, value }) => ({ id, row, col, value })),
+      expression: "5 + 7 = 12"
+    }
+  };
 }
 
 test("game state creates a generated board for the selected level", () => {
@@ -132,6 +176,69 @@ test("queued stale board refresh callbacks do not render over newer state", () =
     assert.match(root.innerHTML, /data-game-panel/);
   } finally {
     clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("hint stage marking uses distinct source, answer, and line classes", () => {
+  const { boardRoot, cellMap, elements, answer } = createHintFixture();
+
+  applyHintStage(boardRoot, cellMap, answer, 1);
+  assert.equal(elements[0].classList.contains("is-hint-source"), true);
+  assert.equal(elements[2].classList.contains("is-hint-answer"), false);
+
+  applyHintStage(boardRoot, cellMap, answer, 2);
+  assert.equal(elements[0].classList.contains("is-hint-source"), false);
+  assert.equal(elements[2].classList.contains("is-hint-answer"), true);
+
+  applyHintStage(boardRoot, cellMap, answer, 4);
+  assert.equal(elements.every((element) => element.classList.contains("is-hint-line")), true);
+});
+
+test("hint controller advances, resets, and ignores stale callbacks", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const callbacks = [];
+  const { boardRoot, cellMap, elements, answer } = createHintFixture();
+  const expressionPreview = { textContent: "" };
+  const statusText = { textContent: "" };
+  let controller = null;
+
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+
+  try {
+    controller = createHintController({
+      boardRoot,
+      cellMap,
+      answer,
+      expressionPreview,
+      statusText,
+      delays: [10, 20, 30, 40]
+    });
+
+    callbacks[0]();
+    assert.equal(elements[0].classList.contains("is-hint-source"), true);
+    assert.equal(statusText.textContent, "ヒントが光っています");
+
+    callbacks[3]();
+    assert.equal(expressionPreview.textContent, "ヒント: 5 + 7 = 12");
+    assert.equal(elements.every((element) => element.classList.contains("is-hint-line")), true);
+
+    controller.reset();
+    assert.equal(elements.some((element) => element.classList.contains("is-hint-line")), false);
+
+    callbacks[1]();
+    assert.equal(elements[2].classList.contains("is-hint-answer"), false);
+
+    callbacks[4]();
+    assert.equal(elements[0].classList.contains("is-hint-source"), true);
+  } finally {
+    controller?.destroy();
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }

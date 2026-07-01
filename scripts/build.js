@@ -14,7 +14,15 @@ for (const file of requiredFiles) {
 
 const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
 
-for (const asset of ["./src/styles.css", "./src/config.js", "./src/rules.js", "./src/board.js", "./src/input.js", "./src/main.js"]) {
+for (const asset of [
+  "./src/styles.css",
+  "./src/config.js",
+  "./src/rules.js",
+  "./src/board.js",
+  "./src/input.js",
+  "./src/hints.js",
+  "./src/main.js"
+]) {
   if (!html.includes(asset)) {
     throw new Error(`index.html does not reference ${asset}`);
   }

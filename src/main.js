@@ -4,17 +4,32 @@
   let boardSeed = 20260701;
   let boardRefreshTimer = null;
   let boardRefreshToken = 0;
+  const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
+  const HINT_CELL_CLASSES = ["is-hint-source", "is-hint-answer", "is-hint-line"];
 
   function getDependencies() {
-    const { MathBlockPuzzleBoard, MathBlockPuzzleConfig, MathBlockPuzzleInput, MathBlockPuzzleRules } = global;
+    const {
+      MathBlockPuzzleBoard,
+      MathBlockPuzzleConfig,
+      MathBlockPuzzleHints,
+      MathBlockPuzzleInput,
+      MathBlockPuzzleRules
+    } = global;
 
-    if (!MathBlockPuzzleBoard || !MathBlockPuzzleConfig || !MathBlockPuzzleInput || !MathBlockPuzzleRules) {
+    if (
+      !MathBlockPuzzleBoard ||
+      !MathBlockPuzzleConfig ||
+      !MathBlockPuzzleHints ||
+      !MathBlockPuzzleInput ||
+      !MathBlockPuzzleRules
+    ) {
       throw new Error("Math block puzzle dependencies are not loaded");
     }
 
     return {
       board: MathBlockPuzzleBoard,
       config: MathBlockPuzzleConfig,
+      hints: MathBlockPuzzleHints,
       input: MathBlockPuzzleInput,
       rules: MathBlockPuzzleRules
     };
@@ -42,7 +57,7 @@
     const { rules, config } = getDependencies();
 
     if (selection.length === 0) {
-      return "ブロックをなぞって式を作ろう";
+      return DEFAULT_EXPRESSION_PREVIEW;
     }
 
     const values = selection.map((cell) => cell.value);
@@ -99,7 +114,7 @@
           </div>
         </div>
         <div class="equation-preview" aria-live="polite" data-expression-preview>
-          ブロックをなぞって式を作ろう
+          ${DEFAULT_EXPRESSION_PREVIEW}
         </div>
         ${createBoardMarkup(state)}
       </section>
@@ -134,6 +149,140 @@
     if (element) {
       element.textContent = text;
     }
+  }
+
+  function clearHintCellClasses(boardRoot) {
+    if (!boardRoot || typeof boardRoot.querySelectorAll !== "function") {
+      return;
+    }
+
+    for (const element of boardRoot.querySelectorAll("[data-cell-id]")) {
+      for (const className of HINT_CELL_CLASSES) {
+        element.classList.remove(className);
+      }
+    }
+  }
+
+  function applyHintStage(boardRoot, cellMap, answer, stage) {
+    const { hints } = getDependencies();
+    const className = hints.getHintClassName(stage);
+    const cellIds = hints.getHintCellIds(answer, stage);
+
+    clearHintCellClasses(boardRoot);
+
+    if (!className) {
+      return [];
+    }
+
+    const markedElements = [];
+
+    for (const cellId of cellIds) {
+      const element = cellMap.get(cellId)?.element;
+
+      if (element) {
+        element.classList.add(className);
+        markedElements.push(element);
+      }
+    }
+
+    return markedElements;
+  }
+
+  function createHintController(options) {
+    const { hints } = getDependencies();
+    const {
+      boardRoot,
+      cellMap,
+      answer,
+      expressionPreview,
+      statusText,
+      delays = hints.HINT_STAGE_DELAYS
+    } = options;
+
+    let destroyed = false;
+    let currentStage = hints.HINT_STAGES.none;
+    let hintToken = 0;
+    let timers = [];
+
+    function clearTimers() {
+      hintToken += 1;
+
+      for (const timer of timers) {
+        global.clearTimeout?.(timer);
+      }
+
+      timers = [];
+      return hintToken;
+    }
+
+    function showStage(stage) {
+      if (destroyed || !answer) {
+        return;
+      }
+
+      currentStage = hints.clampHintStage(stage);
+      applyHintStage(boardRoot, cellMap, answer, currentStage);
+
+      const expression = hints.getHintExpression(answer, currentStage);
+
+      if (expression) {
+        setText(expressionPreview, `ヒント: ${expression}`);
+      }
+
+      if (currentStage > hints.HINT_STAGES.none) {
+        setText(statusText, "ヒントが光っています");
+      }
+    }
+
+    function schedule() {
+      if (destroyed || !answer) {
+        return;
+      }
+
+      const token = clearTimers();
+
+      delays.forEach((delay, index) => {
+        const stage = index + 1;
+        const timer = global.setTimeout?.(() => {
+          if (destroyed || token !== hintToken) {
+            return;
+          }
+
+          showStage(stage);
+        }, delay);
+
+        if (timer !== undefined && timer !== null) {
+          timers.push(timer);
+        }
+      });
+    }
+
+    function reset() {
+      clearHintCellClasses(boardRoot);
+      currentStage = hints.HINT_STAGES.none;
+      schedule();
+    }
+
+    function stop() {
+      clearTimers();
+      clearHintCellClasses(boardRoot);
+      currentStage = hints.HINT_STAGES.none;
+    }
+
+    function destroy() {
+      destroyed = true;
+      stop();
+    }
+
+    schedule();
+
+    return {
+      reset,
+      stop,
+      destroy,
+      showStage,
+      getStage: () => currentStage
+    };
   }
 
   function getFloatingEquationPoint(boardRoot, selectedCells) {
@@ -262,7 +411,7 @@
       return null;
     }
 
-    const { input, rules } = getDependencies();
+    const { hints, input, rules } = getDependencies();
     const boardRoot = root.querySelector("[data-game-board]");
     const statusText = root.querySelector("[data-status-text]");
     const expressionPreview = root.querySelector("[data-expression-preview]");
@@ -277,10 +426,19 @@
       getCellById: (cellId) => cellMap.get(cellId) ?? null
     });
 
-    return input.createPointerDragController({
+    const hintController = createHintController({
+      boardRoot,
+      cellMap,
+      answer: hints.chooseHintAnswer(state.allAnswers),
+      expressionPreview,
+      statusText
+    });
+
+    const pointerController = input.createPointerDragController({
       root: boardRoot,
       getCellFromEvent,
       onSelectionChange: (selection) => {
+        hintController.reset();
         markSelectedCells(boardRoot, selection);
         setText(statusText, `${selection.length} 個選択中`);
         setText(expressionPreview, formatSelectionPreview(selection, state.level));
@@ -292,20 +450,31 @@
         setText(statusText, result.valid ? `正解: ${result.expression}` : "もう一度なぞってみよう");
 
         if (result.valid) {
+          hintController.stop();
           playSuccessAnimation(boardRoot, selection, result.expression);
           markClearingCells(selection);
           boardRoot.classList.add("is-resolving");
           scheduleBoardRefresh(root, state.level.id, getSuccessAnimationDurations().floating);
+        } else {
+          hintController.reset();
         }
 
         markSelectedCells(boardRoot, []);
       },
       onSelectionCancel: () => {
+        hintController.reset();
         markSelectedCells(boardRoot, []);
         setText(statusText, "選択をキャンセルしました");
-        setText(expressionPreview, "ブロックをなぞって式を作ろう");
+        setText(expressionPreview, DEFAULT_EXPRESSION_PREVIEW);
       }
     });
+
+    return {
+      destroy() {
+        pointerController.destroy();
+        hintController.destroy();
+      }
+    };
   }
 
   function renderInitialScreen(root, options = {}) {
@@ -334,7 +503,7 @@
           </div>
         </div>
         <div class="equation-preview" aria-live="polite" data-expression-preview>
-          ブロックをなぞって式を作ろう
+          ${DEFAULT_EXPRESSION_PREVIEW}
         </div>
         ${createBoardMarkup(state)}
       </section>
@@ -350,6 +519,9 @@
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
+    clearHintCellClasses,
+    applyHintStage,
+    createHintController,
     getFloatingEquationPoint,
     prefersReducedMotion,
     getSuccessAnimationDurations,

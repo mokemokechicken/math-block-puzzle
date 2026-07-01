@@ -5,6 +5,7 @@ import "../src/config.js";
 import "../src/rules.js";
 import "../src/board.js";
 import "../src/input.js";
+import "../src/hints.js";
 import "../src/main.js";
 
 const { renderInitialScreen } = globalThis.MathBlockPuzzleApp;
@@ -14,6 +15,7 @@ test("index.html loads the initial app assets", () => {
 
   assert.match(html, /id="app"/);
   assert.match(html, /\.\/src\/styles\.css/);
+  assert.match(html, /\.\/src\/hints\.js/);
   assert.match(html, /\.\/src\/main\.js/);
   assert.doesNotMatch(html, /type="module"/);
 });
