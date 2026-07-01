@@ -52,13 +52,15 @@ test("level 1 board guarantees at least four readable answers", () => {
   );
 });
 
-test("master level board can guarantee answers in all directions", () => {
+test("master level board guarantees readable answers", () => {
   const level = getLevelConfig(9);
   const result = generateBoard(level, { seed: 900 });
   const directionSet = new Set(result.guaranteedAnswers.map((answer) => answer.directionId));
 
   assert.equal(result.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
-  assert.equal([...directionSet].every((directionId) => level.guaranteedDirections.includes(directionId)), true);
+  assert.equal([...directionSet].every((directionId) => (
+    directionId === "left-to-right" || directionId === "top-to-bottom"
+  )), true);
 });
 
 test("board generation is deterministic with the same seed", () => {
@@ -98,7 +100,7 @@ test("answer scanner filters equations outside the level target", () => {
   assert.equal(scanBoardForAnswers(board, getLevelConfig(5), ["left-to-right"]).length, 1);
 });
 
-test("refill cells replaces only cleared positions", () => {
+test("refill cells preserves the readable guarantee count", () => {
   const generated = generateBoard(2, { seed: 200 });
   const before = generated.board.map((row) => row.map((cell) => cell.value));
   const cells = [
@@ -110,9 +112,43 @@ test("refill cells replaces only cleared positions", () => {
   const after = refilled.board.map((row) => row.map((cell) => cell.value));
 
   assert.notDeepEqual(after[0].slice(0, 3), before[0].slice(0, 3));
-  assert.deepEqual(after[0].slice(3), before[0].slice(3));
-  assert.deepEqual(after.slice(1), before.slice(1));
   assert.equal(refilled.board.flat().every((cell) => cell.value >= 1 && cell.value <= 10), true);
+  assert.equal(refilled.guaranteedAnswers.length >= generated.level.guaranteedAnswerCount, true);
+  assert.equal(refilled.allAnswers.length >= refilled.guaranteedAnswers.length, true);
+});
+
+test("refill cells restores guarantees without breaking existing disjoint answers", () => {
+  const baseLevel = getLevelConfig(1);
+  const level = { ...baseLevel, guaranteedAnswerCount: 2 };
+  const board = createEmptyBoard(4, 4);
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 5;
+    }
+  }
+
+  board[3][0].value = 1;
+  board[3][1].value = 1;
+  board[3][2].value = 2;
+
+  const refilled = refillCells(board, [board[0][0]], level, { random: () => 0.99 });
+  const preservedAnswer = refilled.allAnswers.find((answer) => (
+    answer.directionId === "left-to-right" &&
+    answer.expression === "1 + 1 = 2" &&
+    answer.cells.map((cell) => cell.id).join(",") === "3:0,3:1,3:2"
+  ));
+
+  assert.equal(refilled.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
+  assert.ok(preservedAnswer);
+  assert.deepEqual(refilled.board[3].slice(0, 3).map((cell) => cell.value), [1, 1, 2]);
+  assert.equal(refilled.board.flat().some((cell) => (
+    cell.id !== "0:0" &&
+    cell.id !== "3:0" &&
+    cell.id !== "3:1" &&
+    cell.id !== "3:2" &&
+    cell.value !== 5
+  )), true);
 });
 
 test("seeded random produces repeatable values", () => {

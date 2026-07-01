@@ -578,7 +578,7 @@
     const hintController = createHintController({
       boardRoot,
       cellMap,
-      answer: hints.chooseHintAnswer(state.allAnswers),
+      answer: hints.chooseHintAnswer(state.guaranteedAnswers),
       expressionPreview,
       statusText,
       onStageChange: () => playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.hint)

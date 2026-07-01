@@ -42,6 +42,10 @@
     };
   }
 
+  function getCellKey(cell) {
+    return `${cell.row}:${cell.col}`;
+  }
+
   function createEmptyBoard(width, height) {
     return Array.from({ length: height }, (_, row) => (
       Array.from({ length: width }, (_cell, col) => createCell(row, col))
@@ -149,10 +153,159 @@
     }
   }
 
+  function listEquationCandidates(level) {
+    const candidates = [];
+
+    for (const operation of level.operations) {
+      const constraint = getEquationConstraint(level, operation);
+
+      if (!constraint) {
+        continue;
+      }
+
+      for (let left = constraint.left.min; left <= constraint.left.max; left += 1) {
+        for (let right = constraint.right.min; right <= constraint.right.max; right += 1) {
+          const answer = operation === OPERATIONS.add ? left + right : left - right;
+          const values = [left, right, answer];
+
+          if (isEquationAllowed(level, values, operation)) {
+            candidates.push({ operation, values });
+          }
+        }
+      }
+    }
+
+    return candidates;
+  }
+
+  function collectPreservedAnswerCellKeys(board, level, refillCellKeys) {
+    const preservedCellKeys = new Set();
+
+    for (const answer of scanBoardForAnswers(board, level)) {
+      if (answer.cells.some((cell) => refillCellKeys.has(getCellKey(cell)))) {
+        continue;
+      }
+
+      for (const cell of answer.cells) {
+        preservedCellKeys.add(getCellKey(cell));
+      }
+    }
+
+    return preservedCellKeys;
+  }
+
+  function addAnswerCellKeys(cellKeys, answers) {
+    for (const answer of answers) {
+      for (const cell of answer.cells) {
+        cellKeys.add(getCellKey(cell));
+      }
+    }
+  }
+
+  function createGuaranteePlan(placement, equation, protectedCellKeys, refillCellKeys) {
+    const changes = [];
+    let outsideRefillChangeCount = 0;
+
+    for (let index = 0; index < placement.cells.length; index += 1) {
+      const cell = placement.cells[index];
+      const nextValue = equation.values[index];
+
+      if (cell.value === nextValue) {
+        continue;
+      }
+
+      const cellKey = getCellKey(cell);
+
+      if (protectedCellKeys.has(cellKey)) {
+        return null;
+      }
+
+      if (!refillCellKeys.has(cellKey)) {
+        outsideRefillChangeCount += 1;
+      }
+
+      changes.push({ cell, value: nextValue });
+    }
+
+    if (changes.length === 0) {
+      return null;
+    }
+
+    return {
+      placement,
+      equation,
+      changes,
+      outsideRefillChangeCount
+    };
+  }
+
+  function isBetterGuaranteePlan(candidate, current) {
+    if (!current) {
+      return true;
+    }
+
+    if (candidate.changes.length !== current.changes.length) {
+      return candidate.changes.length < current.changes.length;
+    }
+
+    return candidate.outsideRefillChangeCount < current.outsideRefillChangeCount;
+  }
+
+  function findGuaranteePlan(board, level, protectedCellKeys, refillCellKeys) {
+    const placements = listLinePlacements(board, level.guaranteedDirections, level.selectionLength);
+    const equations = listEquationCandidates(level);
+    let bestPlan = null;
+
+    for (const placement of placements) {
+      for (const equation of equations) {
+        const plan = createGuaranteePlan(placement, equation, protectedCellKeys, refillCellKeys);
+
+        if (plan && isBetterGuaranteePlan(plan, bestPlan)) {
+          bestPlan = plan;
+        }
+      }
+    }
+
+    return bestPlan;
+  }
+
+  function restoreGuaranteedAnswers(board, level, protectedCellKeys, refillCellKeys) {
+    let guaranteedAnswers = scanBoardForAnswers(board, level, level.guaranteedDirections);
+
+    while (guaranteedAnswers.length < level.guaranteedAnswerCount) {
+      const previousCount = guaranteedAnswers.length;
+      addAnswerCellKeys(protectedCellKeys, guaranteedAnswers);
+
+      const plan = findGuaranteePlan(board, level, protectedCellKeys, refillCellKeys);
+
+      if (!plan) {
+        break;
+      }
+
+      for (const change of plan.changes) {
+        change.cell.value = change.value;
+      }
+
+      for (const cell of plan.placement.cells) {
+        protectedCellKeys.add(getCellKey(cell));
+      }
+
+      guaranteedAnswers = scanBoardForAnswers(board, level, level.guaranteedDirections);
+
+      if (guaranteedAnswers.length <= previousCount) {
+        break;
+      }
+    }
+
+    return guaranteedAnswers;
+  }
+
   function refillCells(board, cells, levelInput, options = {}) {
     const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
     const random = options.random ?? createSeededRandom(options.seed);
     const nextBoard = cloneBoard(board);
+    const refillCellKeys = new Set(cells.map(getCellKey));
+    const protectedCellKeys = collectPreservedAnswerCellKeys(board, level, refillCellKeys);
 
     for (const cell of cells) {
       if (!isWithinBoard(nextBoard, cell.row, cell.col)) {
@@ -162,10 +315,12 @@
       nextBoard[cell.row][cell.col].value = randomInRange(random, level.numberRange);
     }
 
+    const guaranteedAnswers = restoreGuaranteedAnswers(nextBoard, level, protectedCellKeys, refillCellKeys);
+
     return {
       board: nextBoard,
       level,
-      guaranteedAnswers: scanBoardForAnswers(nextBoard, level, level.guaranteedDirections),
+      guaranteedAnswers,
       allAnswers: scanBoardForAnswers(nextBoard, level)
     };
   }
@@ -267,6 +422,7 @@
     cloneBoard,
     getLineCells,
     listLinePlacements,
+    restoreGuaranteedAnswers,
     refillCells,
     scanBoardForAnswers,
     generateBoard

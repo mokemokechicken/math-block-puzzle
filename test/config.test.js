@@ -67,11 +67,13 @@ test("mixed levels allow addition and subtraction", () => {
   assert.equal(isGuaranteedDirection(level, "right-to-left"), false);
 });
 
-test("master level can guarantee answers in all directions", () => {
-  const level = getLevelConfig(9);
-
-  for (const directionId of ALL_DIRECTION_IDS) {
-    assert.equal(isGuaranteedDirection(level, directionId), true);
+test("all levels keep validation all-direction but guarantee placement readable", () => {
+  for (const level of LEVELS) {
+    assert.deepEqual(level.validationDirections, ALL_DIRECTION_IDS);
+    assert.equal(isGuaranteedDirection(level, "left-to-right"), true);
+    assert.equal(isGuaranteedDirection(level, "top-to-bottom"), true);
+    assert.equal(isGuaranteedDirection(level, "right-to-left"), false);
+    assert.equal(isGuaranteedDirection(level, "bottom-to-top"), false);
   }
 });
 

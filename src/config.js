@@ -231,7 +231,7 @@
       selectionLength: 3,
       operations: Object.freeze([OPERATIONS.add, OPERATIONS.subtract]),
       validationDirections: ALL_DIRECTION_IDS,
-      guaranteedDirections: ALL_DIRECTION_IDS,
+      guaranteedDirections: READABLE_DIRECTION_IDS,
       guaranteedAnswerCount: 4,
       clearAnswerCount: 5,
       numberRange: NUMBER_RANGE,
