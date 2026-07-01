@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import "../src/config.js";
+import "../src/rules.js";
+import "../src/board.js";
+import "../src/input.js";
 import "../src/main.js";
 
 const { renderInitialScreen } = globalThis.MathBlockPuzzleApp;
@@ -17,8 +21,8 @@ test("index.html loads the initial app assets", () => {
 test("main script renders the initial placeholder copy", () => {
   const source = readFileSync("src/main.js", "utf8");
 
-  assert.match(source, /数字ブロックを縦か横/);
-  assert.match(source, /board-placeholder/);
+  assert.match(source, /縦か横に 3 個/);
+  assert.match(source, /data-game-board/);
 });
 
 test("initial renderer mounts visible app markup into #game-root", () => {
@@ -26,9 +30,9 @@ test("initial renderer mounts visible app markup into #game-root", () => {
 
   renderInitialScreen(root);
 
-  assert.match(root.innerHTML, /status-panel/);
-  assert.match(root.innerHTML, /board-placeholder/);
-  assert.match(root.innerHTML, /数字ブロックを縦か横/);
+  assert.match(root.innerHTML, /game-toolbar/);
+  assert.match(root.innerHTML, /game-board/);
+  assert.match(root.innerHTML, /縦か横に 3 個/);
   assert.match(root.innerHTML, /data-cell-id="0:0"/);
 });
 
