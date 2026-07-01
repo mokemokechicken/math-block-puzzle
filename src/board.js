@@ -1,17 +1,23 @@
 (function defineBoardGeneration(global) {
   const config = global.MathBlockPuzzleConfig;
+  const rules = global.MathBlockPuzzleRules;
 
   if (!config) {
     throw new Error("MathBlockPuzzleConfig must be loaded before board.js");
+  }
+
+  if (!rules) {
+    throw new Error("MathBlockPuzzleRules must be loaded before board.js");
   }
 
   const {
     NUMBER_RANGE,
     OPERATIONS,
     getDirection,
-    getLevelConfig,
-    isOperationAllowed
+    getLevelConfig
   } = config;
+
+  const { evaluateEquation } = rules;
 
   function createSeededRandom(seed = Date.now()) {
     let state = Number(seed) >>> 0;
@@ -123,21 +129,6 @@
     }
   }
 
-  function evaluateValues(values, operations) {
-    const [left, right, answer] = values;
-    const results = [];
-
-    if (operations.includes(OPERATIONS.add) && left + right === answer) {
-      results.push({ operation: OPERATIONS.add, expression: `${left} + ${right} = ${answer}` });
-    }
-
-    if (operations.includes(OPERATIONS.subtract) && left - right === answer) {
-      results.push({ operation: OPERATIONS.subtract, expression: `${left} - ${right} = ${answer}` });
-    }
-
-    return results;
-  }
-
   function scanBoardForAnswers(board, levelInput, directionIds = null) {
     const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
     const scanDirectionIds = directionIds ?? level.validationDirections;
@@ -151,11 +142,7 @@
         continue;
       }
 
-      for (const result of evaluateValues(values, level.operations)) {
-        if (!isOperationAllowed(level, result.operation)) {
-          continue;
-        }
-
+      for (const result of evaluateEquation(values, level.operations)) {
         answers.push({
           directionId: placement.directionId,
           cells: placement.cells,
