@@ -27,6 +27,13 @@ test("main script renders the initial placeholder copy", () => {
   assert.match(source, /data-game-board/);
 });
 
+test("dynamic message regions reserve multiline height to avoid layout shift", () => {
+  const css = readFileSync("src/styles.css", "utf8");
+
+  assert.match(css, /\.status-text\s*{[^}]*min-height: 3\.1em;/s);
+  assert.match(css, /\.equation-preview\s*{[^}]*min-height: 5\.15rem;/s);
+});
+
 test("initial renderer mounts visible app markup into #game-root", () => {
   const root = { innerHTML: "" };
 
