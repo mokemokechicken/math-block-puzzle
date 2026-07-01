@@ -17,6 +17,7 @@ test("index.html loads the initial app assets", () => {
   assert.match(html, /\.\/src\/styles\.css/);
   assert.match(html, /\.\/src\/hints\.js/);
   assert.match(html, /\.\/src\/main\.js/);
+  assert.match(html, /viewport-fit=cover/);
   assert.doesNotMatch(html, /type="module"/);
 });
 
@@ -32,6 +33,14 @@ test("dynamic message regions reserve multiline height to avoid layout shift", (
 
   assert.match(css, /\.status-text\s*{[^}]*min-height: 3\.1em;/s);
   assert.match(css, /\.equation-preview\s*{[^}]*min-height: 5\.15rem;/s);
+});
+
+test("mobile layout reserves bottom space for browser controls", () => {
+  const css = readFileSync("src/styles.css", "utf8");
+
+  assert.match(css, /--mobile-browser-controls-space: 96px;/);
+  assert.match(css, /padding: 18px 18px calc\(var\(--mobile-browser-controls-space\) \+ env\(safe-area-inset-bottom\)\);/);
+  assert.match(css, /min-height: 100svh;/);
 });
 
 test("initial renderer mounts visible app markup into #game-root", () => {
