@@ -143,6 +143,10 @@ h1 {
   user-select: none;
 }
 
+.game-board.is-resolving {
+  pointer-events: none;
+}
+
 .board-placeholder {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -204,6 +208,11 @@ h1 {
   border-color: #16a34a;
   box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.22), 0 14px 28px rgba(22, 163, 74, 0.2);
   transform: scale(1.04);
+}
+
+.number-block.is-clearing {
+  opacity: 0;
+  transform: scale(0.72);
 }
 
 .floating-equation {
