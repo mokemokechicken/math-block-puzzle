@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import "../src/config.js";
+import "../src/rules.js";
 import "../src/board.js";
 
 const { getLevelConfig } = globalThis.MathBlockPuzzleConfig;
