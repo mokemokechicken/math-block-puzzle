@@ -587,6 +587,9 @@
     const pointerController = input.createPointerDragController({
       root: boardRoot,
       getCellFromEvent,
+      onInteractionStart: () => {
+        getSoundController()?.unlock?.();
+      },
       onSelectionChange: (selection) => {
         getSoundController()?.unlock?.();
         hintController.reset();
@@ -657,6 +660,10 @@
 
       audioToggle.textContent = isMuted ? "音オフ" : "音オン";
       audioToggle.setAttribute?.("aria-pressed", isMuted ? "true" : "false");
+
+      if (!isMuted) {
+        controller?.unlock?.();
+      }
     });
 
     root.querySelector?.("[data-retry-level]")?.addEventListener?.("click", () => {

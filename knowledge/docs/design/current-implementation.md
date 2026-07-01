@@ -131,7 +131,7 @@ DOM 接続では `clientX/clientY` と `elementFromPoint()` を使い、pointer 
 - クリア: 短いジングル。
 - ヒント: 控えめな短音。
 
-AudioContext はユーザー操作後に作成または再開する。Web Audio API が使えない環境、または autoplay 制約で再生できない環境でも、音を鳴らさずゲーム進行を継続する。UI にはミュート切り替えを表示する。
+AudioContext はユーザー操作後に作成または再開する。モバイルブラウザでは autoplay 制約が強いため、盤面の `pointerdown` 時点で短い無音トーンを開始して音声をアンロックし、suspended context では resume 完了後の現在時刻で効果音を予約する。Web Audio API が使えない環境、または autoplay 制約で再生できない環境でも、音を鳴らさずゲーム進行を継続する。UI にはミュート切り替えを表示する。
 
 ## 検証
 

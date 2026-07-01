@@ -134,6 +134,7 @@
       root,
       getCellFromEvent,
       maxSelectionLength = 3,
+      onInteractionStart = () => {},
       onSelectionChange = () => {},
       onSelectionComplete = () => {},
       onSelectionCancel = () => {}
@@ -180,6 +181,7 @@
       event.preventDefault();
       activePointerId = event.pointerId;
       selection = [cell];
+      onInteractionStart(cell, event);
 
       if (event.currentTarget && typeof event.currentTarget.setPointerCapture === "function") {
         event.currentTarget.setPointerCapture(event.pointerId);

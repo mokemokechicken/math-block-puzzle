@@ -169,6 +169,30 @@ test("pointer controller emits selection changes and completion", () => {
   assert.equal(root.listenerCount(), 0);
 });
 
+test("pointer controller emits interaction start on accepted pointerdown", () => {
+  const root = createFakeRoot();
+  const starts = [];
+  let currentCell = null;
+  const controller = createPointerDragController({
+    root,
+    getCellFromEvent: () => currentCell,
+    onInteractionStart: (selectedCell, event) => {
+      starts.push({ id: selectedCell.id, pointerId: event.pointerId });
+    }
+  });
+
+  currentCell = null;
+  root.dispatch("pointerdown", { pointerId: 1 });
+  currentCell = cell(0, 0);
+  root.dispatch("pointerdown", { pointerId: 2 });
+  currentCell = cell(0, 1);
+  root.dispatch("pointerdown", { pointerId: 3 });
+
+  assert.deepEqual(starts, [{ id: "0:0", pointerId: 2 }]);
+
+  controller.destroy();
+});
+
 test("pointer controller includes the release cell when the last move was skipped", () => {
   const root = createFakeRoot();
   let completed = null;

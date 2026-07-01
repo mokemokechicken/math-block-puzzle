@@ -39,7 +39,10 @@ class FakeAudioContext {
   constructor() {
     this.currentTime = 0;
     this.destination = {};
-    this.state = "running";
+    this.state = FakeAudioContext.initialState;
+    this.nodes = [];
+    this.resumeCalls = 0;
+    this.resolveResume = null;
     FakeAudioContext.instances.push(this);
   }
 
@@ -54,10 +57,27 @@ class FakeAudioContext {
     this.nodes.push(node);
     return node;
   }
+
+  resume() {
+    this.resumeCalls += 1;
+
+    if (FakeAudioContext.resumeMode === "immediate") {
+      this.state = "running";
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.resolveResume = () => {
+        this.state = "running";
+        resolve();
+      };
+    });
+  }
 }
 
 FakeAudioContext.instances = [];
-FakeAudioContext.prototype.nodes = null;
+FakeAudioContext.initialState = "running";
+FakeAudioContext.resumeMode = "immediate";
 
 test("sound controller is silent when Web Audio is unavailable", () => {
   const originalAudioContext = globalThis.AudioContext;
@@ -81,7 +101,8 @@ test("sound controller plays generated tones and supports mute", () => {
   const originalAudioContext = globalThis.AudioContext;
 
   FakeAudioContext.instances = [];
-  FakeAudioContext.prototype.nodes = [];
+  FakeAudioContext.initialState = "running";
+  FakeAudioContext.resumeMode = "immediate";
   globalThis.AudioContext = FakeAudioContext;
 
   try {
@@ -99,5 +120,39 @@ test("sound controller plays generated tones and supports mute", () => {
     assert.equal(controller.play(SOUND_TYPES.hint), true);
   } finally {
     globalThis.AudioContext = originalAudioContext;
+  }
+});
+
+test("sound controller unlocks and delays playback until a suspended context resumes", async () => {
+  const originalAudioContext = globalThis.AudioContext;
+
+  FakeAudioContext.instances = [];
+  FakeAudioContext.initialState = "suspended";
+  FakeAudioContext.resumeMode = "deferred";
+  globalThis.AudioContext = FakeAudioContext;
+
+  try {
+    const controller = createSoundController();
+
+    assert.equal(controller.unlock(), true);
+
+    const context = FakeAudioContext.instances[0];
+    assert.equal(context.resumeCalls, 1);
+    assert.equal(context.nodes.length, 2);
+
+    assert.equal(controller.play(SOUND_TYPES.correct), true);
+    assert.equal(context.nodes.length, 2);
+
+    context.resolveResume();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.equal(context.state, "running");
+    assert.equal(context.nodes.length > 2, true);
+  } finally {
+    globalThis.AudioContext = originalAudioContext;
+    FakeAudioContext.initialState = "running";
+    FakeAudioContext.resumeMode = "immediate";
   }
 });
