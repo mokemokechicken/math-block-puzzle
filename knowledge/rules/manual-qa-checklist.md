@@ -5,7 +5,7 @@
 - `npm run lint` が通る。
 - `npm run build` が通る。
 - `npm test` が通る。
-- 変更対象の `docs/dev/{feature_name}/requirements.md` と `design.md` が最新の実装と一致している。
+- 変更内容が [現行実装の設計](../docs/design/current-implementation.md) と矛盾していない。
 
 ## デスクトップ幅
 

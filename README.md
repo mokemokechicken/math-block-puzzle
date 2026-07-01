@@ -14,10 +14,12 @@ npm run build
 npm test
 ```
 
-ブラウザでの確認観点は [手動 QA チェックリスト](docs/qa/manual-checklist.md) にまとめます。
+ブラウザでの確認観点は [手動 QA チェックリスト](knowledge/rules/manual-qa-checklist.md) にまとめます。
 
 ## ドキュメント
 
-- [ゲームコンセプト](docs/concept.md)
-- [手動 QA チェックリスト](docs/qa/manual-checklist.md)
-- `docs/dev/` 以下に feature ごとの要件・設計メモを置きます。
+- [開発・運用ルール](knowledge/rules/development.md)
+- [現行実装の設計](knowledge/docs/design/current-implementation.md)
+- [ドメイン用語](knowledge/docs/domain/glossary.md)
+- [手動 QA チェックリスト](knowledge/rules/manual-qa-checklist.md)
+- [プロジェクト知識配置の意思決定](knowledge/docs/decision/0001-project-knowledge-layout.md)

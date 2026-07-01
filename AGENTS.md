@@ -2,18 +2,24 @@
 
 この repo は、足し算・引き算ブロックパズルの静的 Web アプリです。
 
-## 開発方針
+## 知識の入口
+
+- [開発・運用ルール](knowledge/rules/development.md)
+- [現行実装の設計](knowledge/docs/design/current-implementation.md)
+- [手動 QA チェックリスト](knowledge/rules/manual-qa-checklist.md)
+- [ドメイン用語](knowledge/docs/domain/glossary.md)
+- [意思決定記録](knowledge/docs/decision/0001-project-knowledge-layout.md)
+
+## Agent 作業ルール
 
 - 説明、docs、PR 本文は日本語で書く。
-- GitHub Pages で配布できる静的アセットとして実装する。
-- 初期スコープは 3 ブロックの足し算・引き算に限定する。
-- 掛け算・割り算は将来候補であり、初期実装には含めない。
-- 正解判定では、左から右、右から左、上から下、下から上をすべて許可する。
-- 低レベルでは、保証正解の配置だけを左から右、上から下に寄せる。
+- 作業前に関連する `knowledge/` の文書を確認する。
+- 恒久的な知識は `knowledge/` に置く。`docs/dev/` は作業中の一時メモに限定し、完了時に削除または `knowledge/` へ反映する。
+- LLM Agent 用 skill の実体は `knowledge/skills/` に置く。`.codex/skills`、`.claude/skills`、`skills` が必要な場合は symlink として扱う。
 
-## 検証
+## 検証コマンド
 
-変更後は原則として次を実行する。
+変更後は原則として次を実行する:
 
 ```sh
 npm run lint
@@ -21,8 +27,4 @@ npm run build
 npm test
 ```
 
-表示や操作に関わる変更では、[docs/qa/manual-checklist.md](docs/qa/manual-checklist.md) の該当項目も確認する。
-
-## docs/dev
-
-feature ごとに `docs/dev/{feature_name}/requirements.md` と `docs/dev/{feature_name}/design.md` を作成する。
+表示や操作に関わる変更では、[手動 QA チェックリスト](knowledge/rules/manual-qa-checklist.md) の該当項目も確認する。
