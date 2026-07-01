@@ -198,6 +198,21 @@ h1 {
   background: var(--block-c);
 }
 
+.number-block.is-hint-source {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 9px 18px rgba(146, 64, 14, 0.14);
+}
+
+.number-block.is-hint-answer {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18), 0 9px 18px rgba(30, 64, 175, 0.14);
+}
+
+.number-block.is-hint-line {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.16), 0 9px 18px rgba(91, 33, 182, 0.14);
+}
+
 .number-block.is-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
