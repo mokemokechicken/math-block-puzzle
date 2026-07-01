@@ -89,9 +89,12 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   width: min(100%, 360px);
+  touch-action: none;
+  user-select: none;
 }
 
 .placeholder-block {
+  appearance: none;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -102,6 +105,8 @@ h1 {
   font-size: 1.8rem;
   font-weight: 800;
   box-shadow: 0 8px 20px rgba(27, 39, 66, 0.12);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .placeholder-block:nth-child(3n + 2) {
@@ -110,6 +115,12 @@ h1 {
 
 .placeholder-block:nth-child(3n) {
   background: var(--block-c);
+}
+
+.placeholder-block.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 24px rgba(15, 118, 110, 0.2);
+  transform: translateY(-2px);
 }
 
 @media (max-width: 520px) {
