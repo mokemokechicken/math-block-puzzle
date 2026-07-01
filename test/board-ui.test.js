@@ -6,7 +6,13 @@ import "../src/board.js";
 import "../src/input.js";
 import "../src/main.js";
 
-const { createGameState, createBoardMarkup, formatSelectionPreview } = globalThis.MathBlockPuzzleApp;
+const {
+  createGameState,
+  createBoardMarkup,
+  formatSelectionPreview,
+  getFloatingEquationPoint,
+  getSuccessAnimationDurations
+} = globalThis.MathBlockPuzzleApp;
 const { getLevelConfig } = globalThis.MathBlockPuzzleConfig;
 
 function cell(row, col, value) {
@@ -43,4 +49,29 @@ test("selection preview shows empty, partial, and complete expressions", () => {
     cell(0, 1, 7),
     cell(0, 2, 12)
   ], level), "5 + 7 = 12");
+});
+
+test("floating equation point uses selected cell centers relative to board", () => {
+  const boardRoot = {
+    getBoundingClientRect: () => ({ left: 10, top: 20 })
+  };
+  const selectedCells = [
+    { element: { getBoundingClientRect: () => ({ left: 20, top: 40, width: 40, height: 40 }) } },
+    { element: { getBoundingClientRect: () => ({ left: 70, top: 40, width: 40, height: 40 }) } },
+    { element: { getBoundingClientRect: () => ({ left: 120, top: 40, width: 40, height: 40 }) } }
+  ];
+
+  assert.deepEqual(getFloatingEquationPoint(boardRoot, selectedCells), { x: 80, y: 40 });
+});
+
+test("success animation durations follow reduced motion preference", () => {
+  const originalMatchMedia = globalThis.matchMedia;
+
+  globalThis.matchMedia = () => ({ matches: true });
+  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 180, floating: 240 });
+
+  globalThis.matchMedia = () => ({ matches: false });
+  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 520, floating: 1200 });
+
+  globalThis.matchMedia = originalMatchMedia;
 });
