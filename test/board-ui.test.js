@@ -13,11 +13,15 @@ const {
   createGamePanelMarkup,
   formatSelectionPreview,
   getFloatingEquationPoint,
+  getFloatingEquationViewportPoint,
+  getBoardRefillDelay,
   getSuccessAnimationDurations,
+  playSuccessAnimation,
   nextBoardSeed,
   clearScheduledBoardRefresh,
   scheduleBoardRefresh,
   scheduleBoardRefill,
+  scrollBoardIntoView,
   applyHintStage,
   createHintController
 } = globalThis.MathBlockPuzzleApp;
@@ -125,16 +129,84 @@ test("floating equation point uses selected cell centers relative to board", () 
   assert.deepEqual(getFloatingEquationPoint(boardRoot, selectedCells), { x: 80, y: 40 });
 });
 
+test("floating equation viewport point is stable after board rerender", () => {
+  const selectedCells = [
+    { element: { getBoundingClientRect: () => ({ left: 20, top: 40, width: 40, height: 40 }) } },
+    { element: { getBoundingClientRect: () => ({ left: 70, top: 40, width: 40, height: 40 }) } },
+    { element: { getBoundingClientRect: () => ({ left: 120, top: 40, width: 40, height: 40 }) } }
+  ];
+
+  assert.deepEqual(getFloatingEquationViewportPoint(selectedCells), { x: 90, y: 60 });
+});
+
 test("success animation durations follow reduced motion preference", () => {
   const originalMatchMedia = globalThis.matchMedia;
 
   globalThis.matchMedia = () => ({ matches: true });
   assert.deepEqual(getSuccessAnimationDurations(), { highlight: 180, floating: 240 });
+  assert.equal(getBoardRefillDelay(), 60);
 
   globalThis.matchMedia = () => ({ matches: false });
   assert.deepEqual(getSuccessAnimationDurations(), { highlight: 520, floating: 1200 });
+  assert.equal(getBoardRefillDelay(), 120);
 
   globalThis.matchMedia = originalMatchMedia;
+});
+
+test("success animation detaches floating equation so refill can rerender the board", () => {
+  const originalDocument = globalThis.document;
+  const originalSetTimeout = globalThis.setTimeout;
+  const appended = [];
+  const callbacks = [];
+  const floating = {
+    className: "",
+    textContent: "",
+    style: {},
+    remove: () => {
+      floating.removed = true;
+    }
+  };
+  const selectedCells = [
+    {
+      element: {
+        dataset: {},
+        classList: { add: () => {}, remove: () => {} },
+        getBoundingClientRect: () => ({ left: 20, top: 40, width: 40, height: 40 })
+      }
+    }
+  ];
+  const boardRoot = {
+    append: () => {
+      throw new Error("floating equation should be detached from board root");
+    }
+  };
+
+  globalThis.document = {
+    body: {
+      append: (element) => appended.push(element)
+    },
+    createElement: () => floating
+  };
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+
+  try {
+    playSuccessAnimation(boardRoot, selectedCells, "1 + 6 = 7");
+
+    assert.equal(appended[0], floating);
+    assert.match(floating.className, /floating-equation--detached/);
+    assert.equal(floating.textContent, "1 + 6 = 7");
+    assert.equal(floating.style.left, "40px");
+    assert.equal(floating.style.top, "60px");
+
+    callbacks[0]();
+    assert.equal(floating.removed, true);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.setTimeout = originalSetTimeout;
+  }
 });
 
 test("next board seed increases monotonically for board refresh", () => {
@@ -251,6 +323,48 @@ test("scheduled board refill renders clear state at target count", () => {
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }
+});
+
+test("scrolling a new stage uses the board bottom as the viewport anchor", () => {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const callbacks = [];
+  const scrollCalls = [];
+  const boardElement = {
+    scrollIntoView: (options) => scrollCalls.push(options)
+  };
+  const root = {
+    innerHTML: "",
+    querySelectorAll: () => [],
+    querySelector: (selector) => (selector === "[data-game-board]" ? boardElement : null)
+  };
+
+  globalThis.requestAnimationFrame = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+
+  try {
+    assert.equal(scrollBoardIntoView(root), true);
+
+    assert.equal(callbacks.length, 1);
+
+    callbacks[0]();
+    assert.deepEqual(scrollCalls, [{
+      block: "end",
+      inline: "nearest",
+      behavior: "smooth"
+    }]);
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+  }
+});
+
+test("scrolling the board into view is a no-op when the board is absent", () => {
+  const root = {
+    querySelector: () => null
+  };
+
+  assert.equal(scrollBoardIntoView(root), false);
 });
 
 test("hint stage marking uses distinct source, answer, and line classes", () => {

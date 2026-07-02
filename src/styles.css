@@ -381,6 +381,11 @@ h1 {
   animation: float-equation 1200ms ease-out forwards;
 }
 
+.floating-equation--detached {
+  position: fixed;
+  z-index: 100;
+}
+
 @keyframes float-equation {
   0% {
     opacity: 0;

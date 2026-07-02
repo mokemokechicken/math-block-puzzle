@@ -409,8 +409,35 @@
     };
   }
 
+  function getFloatingEquationViewportPoint(selectedCells) {
+    const elements = selectedCells
+      .map((cell) => cell.element)
+      .filter((element) => element && typeof element.getBoundingClientRect === "function");
+
+    if (elements.length === 0) {
+      return { x: 50, y: 50 };
+    }
+
+    const centers = elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    });
+
+    return {
+      x: centers.reduce((sum, point) => sum + point.x, 0) / centers.length,
+      y: centers.reduce((sum, point) => sum + point.y, 0) / centers.length
+    };
+  }
+
   function prefersReducedMotion() {
     return Boolean(global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+  }
+
+  function getBoardRefillDelay() {
+    return prefersReducedMotion() ? 60 : 120;
   }
 
   function getSuccessAnimationDurations() {
@@ -434,6 +461,8 @@
 
     const token = String(successAnimationToken += 1);
     const durations = getSuccessAnimationDurations();
+    const detachedContainer = global.document.body;
+    const isDetached = Boolean(detachedContainer?.append);
 
     for (const cell of selectedCells) {
       cell.element?.classList.add("is-correct");
@@ -443,13 +472,20 @@
       }
     }
 
-    const point = getFloatingEquationPoint(boardRoot, selectedCells);
+    const point = isDetached
+      ? getFloatingEquationViewportPoint(selectedCells)
+      : getFloatingEquationPoint(boardRoot, selectedCells);
     const floating = global.document.createElement("div");
-    floating.className = "floating-equation";
+    floating.className = isDetached ? "floating-equation floating-equation--detached" : "floating-equation";
     floating.textContent = expression;
     floating.style.left = `${point.x}px`;
     floating.style.top = `${point.y}px`;
-    boardRoot.append(floating);
+
+    if (isDetached) {
+      detachedContainer.append(floating);
+    } else {
+      boardRoot.append(floating);
+    }
 
     global.setTimeout?.(() => {
       floating.remove();
@@ -499,7 +535,8 @@
       boardRefreshTimer = null;
       renderInitialScreen(root, {
         levelId,
-        seed: nextBoardSeed()
+        seed: nextBoardSeed(),
+        scrollToBoard: true
       });
     }, delay) ?? null;
 
@@ -616,7 +653,7 @@
           playSuccessAnimation(boardRoot, selection, result.expression);
           markClearingCells(selection);
           boardRoot.classList.add("is-resolving");
-          scheduleBoardRefill(root, nextState, selection, getSuccessAnimationDurations().floating);
+          scheduleBoardRefill(root, nextState, selection, getBoardRefillDelay());
         } else {
           playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.incorrect);
           hintController.reset();
@@ -649,7 +686,8 @@
       button.addEventListener?.("click", () => {
         renderInitialScreen(root, {
           levelId: Number(button.dataset.levelId),
-          seed: nextBoardSeed()
+          seed: nextBoardSeed(),
+          scrollToBoard: true
         });
       });
     }
@@ -671,16 +709,42 @@
     root.querySelector?.("[data-retry-level]")?.addEventListener?.("click", () => {
       renderInitialScreen(root, {
         levelId: state.level.id,
-        seed: nextBoardSeed()
+        seed: nextBoardSeed(),
+        scrollToBoard: true
       });
     });
 
     root.querySelector?.("[data-next-level]")?.addEventListener?.("click", (event) => {
       renderInitialScreen(root, {
         levelId: Number(event.currentTarget.dataset.nextLevel),
-        seed: nextBoardSeed()
+        seed: nextBoardSeed(),
+        scrollToBoard: true
       });
     });
+  }
+
+  function scrollBoardIntoView(root) {
+    const boardRoot = root?.querySelector?.("[data-game-board]");
+
+    if (!boardRoot || typeof boardRoot.scrollIntoView !== "function") {
+      return false;
+    }
+
+    const scroll = () => {
+      boardRoot.scrollIntoView({
+        block: "end",
+        inline: "nearest",
+        behavior: "smooth"
+      });
+    };
+
+    if (typeof global.requestAnimationFrame === "function") {
+      global.requestAnimationFrame(scroll);
+    } else {
+      scroll();
+    }
+
+    return true;
   }
 
   function renderGameState(root, state) {
@@ -706,6 +770,10 @@
 
     const state = createGameState(options);
     renderGameState(root, state);
+
+    if (options.scrollToBoard) {
+      scrollBoardIntoView(root);
+    }
   }
 
   global.MathBlockPuzzleApp = {
@@ -724,7 +792,9 @@
     applyHintStage,
     createHintController,
     getFloatingEquationPoint,
+    getFloatingEquationViewportPoint,
     prefersReducedMotion,
+    getBoardRefillDelay,
     getSuccessAnimationDurations,
     playSuccessAnimation,
     markClearingCells,
@@ -733,6 +803,7 @@
     scheduleBoardRefill,
     completeState,
     setupGameControls,
+    scrollBoardIntoView,
     setupBoardInput,
     renderGameState,
     renderInitialScreen
