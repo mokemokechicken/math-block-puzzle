@@ -7,7 +7,7 @@
     expression: 4
   });
 
-  const HINT_STAGE_DELAYS = Object.freeze([6000, 10000, 14000, 18000]);
+  const HINT_STAGE_DELAYS = Object.freeze([30000, 35000, 40000, 45000]);
 
   function chooseHintAnswer(answers) {
     if (!Array.isArray(answers) || answers.length === 0) {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import "../src/hints.js";
 
 const {
+  HINT_STAGE_DELAYS,
   HINT_STAGES,
   chooseHintAnswer,
   clampHintStage,
@@ -26,6 +27,10 @@ test("hint answer selection uses the first available current-board answer", () =
   assert.equal(chooseHintAnswer([answer, secondAnswer]), answer);
   assert.equal(chooseHintAnswer([]), null);
   assert.equal(chooseHintAnswer(null), null);
+});
+
+test("hint stage delays start after 30 seconds and advance every 5 seconds", () => {
+  assert.deepEqual(HINT_STAGE_DELAYS, [30000, 35000, 40000, 45000]);
 });
 
 test("hint stages map to source, answer, line, and expression", () => {
