@@ -14,6 +14,15 @@ const {
   scanBoardForAnswers
 } = globalThis.MathBlockPuzzleBoard;
 
+function answerCellSet(answer) {
+  return answer.cells.map((cell) => cell.id).sort().join("|");
+}
+
+function hasAnswerOnSameCells(board, level, cells) {
+  const cellSet = cells.map((cell) => cell.id).sort().join("|");
+  return scanBoardForAnswers(board, level).some((answer) => answerCellSet(answer) === cellSet);
+}
+
 test("empty board creates stable cell coordinates", () => {
   const board = createEmptyBoard(2, 3);
 
@@ -115,6 +124,54 @@ test("refill cells preserves the readable guarantee count", () => {
   assert.equal(refilled.board.flat().every((cell) => cell.value >= 1 && cell.value <= 10), true);
   assert.equal(refilled.guaranteedAnswers.length >= generated.level.guaranteedAnswerCount, true);
   assert.equal(refilled.allAnswers.length >= refilled.guaranteedAnswers.length, true);
+});
+
+test("refill cells prevents the cleared three cells from becoming the next answer", () => {
+  const baseLevel = getLevelConfig(1);
+  const level = { ...baseLevel, guaranteedAnswerCount: 0 };
+  const board = createEmptyBoard(4, 4);
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 5;
+    }
+  }
+
+  const clearedCells = [
+    board[0][0],
+    board[0][1],
+    board[0][2]
+  ];
+  const randomValues = [0, 0, 0.2];
+  const refilled = refillCells(board, clearedCells, level, {
+    random: () => randomValues.shift() ?? 0
+  });
+
+  assert.equal(hasAnswerOnSameCells(refilled.board, level, clearedCells), false);
+});
+
+test("refill cells restores guarantees without reusing the cleared answer cells", () => {
+  const level = getLevelConfig(2);
+  const board = createEmptyBoard(4, 4);
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 10;
+    }
+  }
+
+  const clearedCells = [
+    board[0][0],
+    board[0][1],
+    board[0][2]
+  ];
+  const randomValues = [0, 0, 0.1];
+  const refilled = refillCells(board, clearedCells, level, {
+    random: () => randomValues.shift() ?? 0
+  });
+
+  assert.equal(refilled.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
+  assert.equal(hasAnswerOnSameCells(refilled.board, level, clearedCells), false);
 });
 
 test("refill cells restores guarantees without breaking existing disjoint answers", () => {
