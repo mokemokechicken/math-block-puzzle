@@ -201,6 +201,13 @@
           right: range(1, 9),
           answer: range(11, 18)
         }
+      }),
+      acceptedEquationConstraints: equationConstraints({
+        [OPERATIONS.add]: {
+          left: range(1, 17),
+          right: range(1, 17),
+          answer: range(2, 18)
+        }
       })
     }),
     Object.freeze({
@@ -220,6 +227,13 @@
           left: range(11, 18),
           right: range(1, 9),
           answer: range(1, 9)
+        }
+      }),
+      acceptedEquationConstraints: equationConstraints({
+        [OPERATIONS.subtract]: {
+          left: range(2, 18),
+          right: range(1, 17),
+          answer: range(1, 17)
         }
       })
     }),
@@ -283,18 +297,36 @@
     return level.equationConstraints?.[operation] ?? null;
   }
 
+  function getAcceptedEquationConstraint(level, operation) {
+    return level.acceptedEquationConstraints?.[operation] ?? getEquationConstraint(level, operation);
+  }
+
+  function valuesSatisfyConstraint(values, constraint) {
+    return (
+      isValueInRange(values[0], constraint.left) &&
+      isValueInRange(values[1], constraint.right) &&
+      isValueInRange(values[2], constraint.answer)
+    );
+  }
+
   function isEquationAllowed(level, values, operation) {
+    const constraint = getAcceptedEquationConstraint(level, operation);
+
+    if (!isOperationAllowed(level, operation) || !constraint) {
+      return false;
+    }
+
+    return valuesSatisfyConstraint(values, constraint);
+  }
+
+  function isEquationTarget(level, values, operation) {
     const constraint = getEquationConstraint(level, operation);
 
     if (!isOperationAllowed(level, operation) || !constraint) {
       return false;
     }
 
-    return (
-      isValueInRange(values[0], constraint.left) &&
-      isValueInRange(values[1], constraint.right) &&
-      isValueInRange(values[2], constraint.answer)
-    );
+    return valuesSatisfyConstraint(values, constraint);
   }
 
   function isValidationDirection(level, directionId) {
@@ -314,8 +346,10 @@
     LEVELS,
     getLevelConfig,
     getDirection,
+    getAcceptedEquationConstraint,
     getEquationConstraint,
     isEquationAllowed,
+    isEquationTarget,
     isOperationAllowed,
     isValidationDirection,
     isGuaranteedDirection

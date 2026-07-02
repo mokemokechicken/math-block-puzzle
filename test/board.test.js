@@ -109,6 +109,34 @@ test("answer scanner filters equations outside the level target", () => {
   assert.equal(scanBoardForAnswers(board, getLevelConfig(5), ["left-to-right"]).length, 1);
 });
 
+test("answer scanner keeps target filtering available for carry-level hints", () => {
+  const board = createEmptyBoard(3, 1);
+  board[0][0].value = 1;
+  board[0][1].value = 6;
+  board[0][2].value = 7;
+
+  assert.equal(scanBoardForAnswers(board, getLevelConfig(7), ["left-to-right"]).length, 1);
+  assert.deepEqual(scanBoardForAnswers(
+    board,
+    getLevelConfig(7),
+    ["left-to-right"],
+    { targetOnly: true }
+  ), []);
+});
+
+test("carry level generation still guarantees carry addition targets", () => {
+  const level = getLevelConfig(7);
+  const generated = generateBoard(level, { seed: 700 });
+
+  assert.equal(generated.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
+  assert.equal(generated.guaranteedAnswers.every((answer) => (
+    answer.operation === "add" &&
+    answer.values[0] <= 9 &&
+    answer.values[1] <= 9 &&
+    answer.values[2] >= 11
+  )), true);
+});
+
 test("refill cells preserves the readable guarantee count", () => {
   const generated = generateBoard(2, { seed: 200 });
   const before = generated.board.map((row) => row.map((cell) => cell.value));

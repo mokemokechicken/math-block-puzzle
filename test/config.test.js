@@ -9,6 +9,7 @@ const {
   LEVELS,
   getLevelConfig,
   isEquationAllowed,
+  isEquationTarget,
   isOperationAllowed,
   isValidationDirection,
   isGuaranteedDirection
@@ -77,13 +78,17 @@ test("all levels keep validation all-direction but guarantee placement readable"
   }
 });
 
-test("equation constraints enforce level-specific learning targets", () => {
+test("equation constraints separate accepted answers from learning targets", () => {
   assert.equal(isEquationAllowed(getLevelConfig(1), [2, 3, 5], OPERATIONS.add), true);
   assert.equal(isEquationAllowed(getLevelConfig(1), [5, 7, 12], OPERATIONS.add), false);
   assert.equal(isEquationAllowed(getLevelConfig(7), [8, 6, 14], OPERATIONS.add), true);
-  assert.equal(isEquationAllowed(getLevelConfig(7), [2, 3, 5], OPERATIONS.add), false);
+  assert.equal(isEquationAllowed(getLevelConfig(7), [2, 3, 5], OPERATIONS.add), true);
+  assert.equal(isEquationTarget(getLevelConfig(7), [8, 6, 14], OPERATIONS.add), true);
+  assert.equal(isEquationTarget(getLevelConfig(7), [2, 3, 5], OPERATIONS.add), false);
   assert.equal(isEquationAllowed(getLevelConfig(8), [13, 9, 4], OPERATIONS.subtract), true);
-  assert.equal(isEquationAllowed(getLevelConfig(8), [9, 4, 5], OPERATIONS.subtract), false);
+  assert.equal(isEquationAllowed(getLevelConfig(8), [9, 4, 5], OPERATIONS.subtract), true);
+  assert.equal(isEquationTarget(getLevelConfig(8), [13, 9, 4], OPERATIONS.subtract), true);
+  assert.equal(isEquationTarget(getLevelConfig(8), [9, 4, 5], OPERATIONS.subtract), false);
 });
 
 test("unknown level and direction fail loudly", () => {

@@ -60,6 +60,28 @@ test("subtraction respects selection order", () => {
   });
 });
 
+test("carry and borrowing levels accept visible arithmetic outside the learning target", () => {
+  const level7Result = validateSelection([
+    cell(0, 0, 1),
+    cell(0, 1, 6),
+    cell(0, 2, 7)
+  ], getLevelConfig(7));
+
+  assert.equal(level7Result.valid, true);
+  assert.equal(level7Result.operation, OPERATIONS.add);
+  assert.equal(level7Result.expression, "1 + 6 = 7");
+
+  const level8Result = validateSelection([
+    cell(1, 0, 9),
+    cell(1, 1, 4),
+    cell(1, 2, 5)
+  ], getLevelConfig(8));
+
+  assert.equal(level8Result.valid, true);
+  assert.equal(level8Result.operation, OPERATIONS.subtract);
+  assert.equal(level8Result.expression, "9 - 4 = 5");
+});
+
 test("level 1 does not accept subtraction", () => {
   const result = validateSelection([
     cell(0, 0, 9),

@@ -15,7 +15,8 @@
     getEquationConstraint,
     getDirection,
     getLevelConfig,
-    isEquationAllowed
+    isEquationAllowed,
+    isEquationTarget
   } = config;
 
   const { evaluateEquation } = rules;
@@ -182,7 +183,7 @@
           const answer = operation === OPERATIONS.add ? left + right : left - right;
           const values = [left, right, answer];
 
-          if (isEquationAllowed(level, values, operation)) {
+          if (isEquationTarget(level, values, operation)) {
             candidates.push({ operation, values });
           }
         }
@@ -233,7 +234,7 @@
   }
 
   function scanBoardForAllowedAnswers(board, level, directionIds, blockedAnswerCellSetKeys) {
-    return scanBoardForAnswers(board, level, directionIds)
+    return scanBoardForAnswers(board, level, directionIds, { targetOnly: true })
       .filter((answer) => !answerUsesBlockedCellSet(answer, blockedAnswerCellSetKeys));
   }
 
@@ -537,10 +538,11 @@
     };
   }
 
-  function scanBoardForAnswers(board, levelInput, directionIds = null) {
+  function scanBoardForAnswers(board, levelInput, directionIds = null, options = {}) {
     const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
     const scanDirectionIds = directionIds ?? level.validationDirections;
     const placements = listLinePlacements(board, scanDirectionIds, level.selectionLength);
+    const acceptsEquation = options.targetOnly ? isEquationTarget : isEquationAllowed;
     const answers = [];
 
     for (const placement of placements) {
@@ -551,7 +553,7 @@
       }
 
       for (const result of evaluateEquation(values, level.operations)) {
-        if (!isEquationAllowed(level, values, result.operation)) {
+        if (!acceptsEquation(level, values, result.operation)) {
           continue;
         }
 
@@ -612,7 +614,9 @@
 
       fillRandomNumbers(board, level, baseRandom);
 
-      const guaranteedAnswers = scanBoardForAnswers(board, level, level.guaranteedDirections);
+      const guaranteedAnswers = scanBoardForAnswers(board, level, level.guaranteedDirections, {
+        targetOnly: true
+      });
 
       if (guaranteedAnswers.length >= level.guaranteedAnswerCount) {
         return {

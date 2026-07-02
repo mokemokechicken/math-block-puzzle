@@ -54,7 +54,9 @@
     const level = config.getLevelConfig(options.levelId ?? DEFAULT_LEVEL_ID);
     const generated = options.board ? {
       board: options.board,
-      guaranteedAnswers: board.scanBoardForAnswers(options.board, level, level.guaranteedDirections),
+      guaranteedAnswers: board.scanBoardForAnswers(options.board, level, level.guaranteedDirections, {
+        targetOnly: true
+      }),
       allAnswers: board.scanBoardForAnswers(options.board, level)
     } : board.generateBoard(level, { seed: options.seed ?? 20260701 });
 

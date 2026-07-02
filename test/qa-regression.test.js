@@ -65,6 +65,17 @@ test("QA contract: reverse horizontal and upward selections are accepted", () =>
   assert.equal(bottomToTop.expression, "5 + 4 = 9");
 });
 
+test("QA contract: level 7 accepts non-carry addition when it is visible arithmetic", () => {
+  const result = validateSelection([
+    cell(0, 0, 1),
+    cell(0, 1, 6),
+    cell(0, 2, 7)
+  ], getLevelConfig(7));
+
+  assert.equal(result.valid, true);
+  assert.equal(result.expression, "1 + 6 = 7");
+});
+
 test("QA contract: level 1 guarantees readable left-to-right or top-to-bottom answers", () => {
   const generated = generateBoard(1, { seed: 20260701 });
   const readableDirections = new Set(["left-to-right", "top-to-bottom"]);
