@@ -5,6 +5,7 @@ import "../src/rules.js";
 import "../src/board.js";
 import "../src/input.js";
 import "../src/hints.js";
+import "../src/audio.js";
 import "../src/main.js";
 
 const {
@@ -22,6 +23,7 @@ const {
   scheduleBoardRefresh,
   scheduleBoardRefill,
   scrollBoardIntoView,
+  installAudioUnlockHandlers,
   applyHintStage,
   createHintController
 } = globalThis.MathBlockPuzzleApp;
@@ -49,6 +51,53 @@ function boardRootFor(elements) {
     querySelectorAll: (selector) => (selector === "[data-cell-id]" ? elements : [])
   };
 }
+
+class GestureAudioParam {
+  setValueAtTime() {}
+  exponentialRampToValueAtTime() {}
+}
+
+class GestureAudioNode {
+  constructor() {
+    this.frequency = new GestureAudioParam();
+    this.gain = new GestureAudioParam();
+  }
+
+  connect() {}
+  start() {}
+  stop() {}
+}
+
+class GestureAudioContext {
+  constructor() {
+    this.currentTime = 0;
+    this.destination = {};
+    this.state = "suspended";
+    this.resumeCalls = 0;
+    this.nodes = [];
+    GestureAudioContext.instances.push(this);
+  }
+
+  createOscillator() {
+    const node = new GestureAudioNode();
+    this.nodes.push(node);
+    return node;
+  }
+
+  createGain() {
+    const node = new GestureAudioNode();
+    this.nodes.push(node);
+    return node;
+  }
+
+  resume() {
+    this.resumeCalls += 1;
+    this.state = "running";
+    return Promise.resolve();
+  }
+}
+
+GestureAudioContext.instances = [];
 
 function createHintFixture() {
   const ids = ["0:0", "0:1", "0:2"];
@@ -114,6 +163,34 @@ test("game panel exposes level selection, progress, and audio control", () => {
   assert.match(markup, /aria-pressed="true"/);
   assert.match(markup, /0 \/ 5/);
   assert.match(markup, /data-audio-toggle/);
+});
+
+test("global audio unlock handlers prepare sound on the first page gesture", () => {
+  const originalAudioContext = globalThis.AudioContext;
+  const handlers = {};
+  const documentTarget = {
+    addEventListener: (eventName, handler, options) => {
+      handlers[eventName] = { handler, options };
+    }
+  };
+
+  GestureAudioContext.instances = [];
+  globalThis.AudioContext = GestureAudioContext;
+
+  try {
+    assert.equal(installAudioUnlockHandlers(documentTarget), true);
+    assert.equal(typeof handlers.pointerdown.handler, "function");
+    assert.equal(handlers.pointerdown.options.capture, true);
+    assert.equal(handlers.pointerdown.options.passive, true);
+
+    handlers.pointerdown.handler();
+
+    assert.equal(GestureAudioContext.instances.length, 1);
+    assert.equal(GestureAudioContext.instances[0].resumeCalls, 1);
+    assert.equal(GestureAudioContext.instances[0].nodes.length, 2);
+  } finally {
+    globalThis.AudioContext = originalAudioContext;
+  }
 });
 
 test("floating equation point uses selected cell centers relative to board", () => {
@@ -327,10 +404,16 @@ test("scheduled board refill renders clear state at target count", () => {
 
 test("scrolling a new stage uses the board bottom as the viewport anchor", () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalScrollTo = globalThis.scrollTo;
+  const originalInnerHeight = globalThis.innerHeight;
+  const originalScrollY = globalThis.scrollY;
+  const originalScrollX = globalThis.scrollX;
   const callbacks = [];
+  const timeoutCallbacks = [];
   const scrollCalls = [];
   const boardElement = {
-    scrollIntoView: (options) => scrollCalls.push(options)
+    getBoundingClientRect: () => ({ bottom: 900 })
   };
   const root = {
     innerHTML: "",
@@ -342,6 +425,16 @@ test("scrolling a new stage uses the board bottom as the viewport anchor", () =>
     callbacks.push(callback);
     return callbacks.length;
   };
+  globalThis.setTimeout = (callback) => {
+    timeoutCallbacks.push(callback);
+    return timeoutCallbacks.length;
+  };
+  globalThis.scrollTo = (options) => {
+    scrollCalls.push(options);
+  };
+  globalThis.innerHeight = 640;
+  globalThis.scrollY = 100;
+  globalThis.scrollX = 8;
 
   try {
     assert.equal(scrollBoardIntoView(root), true);
@@ -349,13 +442,29 @@ test("scrolling a new stage uses the board bottom as the viewport anchor", () =>
     assert.equal(callbacks.length, 1);
 
     callbacks[0]();
+    assert.equal(callbacks.length, 2);
+    callbacks[1]();
+
     assert.deepEqual(scrollCalls, [{
-      block: "end",
-      inline: "nearest",
+      top: 376,
+      left: 8,
       behavior: "smooth"
     }]);
+    assert.equal(timeoutCallbacks.length, 1);
+
+    timeoutCallbacks[0]();
+    assert.deepEqual(scrollCalls.at(-1), {
+      top: 376,
+      left: 8,
+      behavior: "smooth"
+    });
   } finally {
     globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.scrollTo = originalScrollTo;
+    globalThis.innerHeight = originalInnerHeight;
+    globalThis.scrollY = originalScrollY;
+    globalThis.scrollX = originalScrollX;
   }
 });
 

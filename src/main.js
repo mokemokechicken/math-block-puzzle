@@ -5,9 +5,11 @@
   let boardSeed = 20260701;
   let boardRefreshTimer = null;
   let boardRefreshToken = 0;
+  let audioUnlockHandlersInstalled = false;
   const DEFAULT_LEVEL_ID = 1;
   const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
   const HINT_CELL_CLASSES = ["is-hint-source", "is-hint-answer", "is-hint-line"];
+  const AUDIO_UNLOCK_EVENTS = ["pointerdown", "touchstart", "mousedown", "click", "keydown"];
 
   function getSoundController() {
     if (!soundController && global.MathBlockPuzzleAudio?.createSoundController) {
@@ -19,6 +21,28 @@
 
   function playSound(soundType) {
     getSoundController()?.play(soundType);
+  }
+
+  function unlockAudioFromUserGesture() {
+    getSoundController()?.unlock?.();
+  }
+
+  function installAudioUnlockHandlers(target = global.document) {
+    if (audioUnlockHandlersInstalled || !target || typeof target.addEventListener !== "function") {
+      return false;
+    }
+
+    const options = {
+      capture: true,
+      passive: true
+    };
+
+    for (const eventName of AUDIO_UNLOCK_EVENTS) {
+      target.addEventListener(eventName, unlockAudioFromUserGesture, options);
+    }
+
+    audioUnlockHandlersInstalled = true;
+    return true;
   }
 
   function getDependencies() {
@@ -725,23 +749,55 @@
 
   function scrollBoardIntoView(root) {
     const boardRoot = root?.querySelector?.("[data-game-board]");
+    const canUseScrollTo = (
+      typeof global.scrollTo === "function" &&
+      typeof boardRoot?.getBoundingClientRect === "function"
+    );
+    const canUseScrollIntoView = typeof boardRoot?.scrollIntoView === "function";
 
-    if (!boardRoot || typeof boardRoot.scrollIntoView !== "function") {
+    if (!boardRoot || (!canUseScrollTo && !canUseScrollIntoView)) {
       return false;
     }
 
     const scroll = () => {
-      boardRoot.scrollIntoView({
+      if (canUseScrollTo) {
+        const rect = boardRoot.getBoundingClientRect();
+        const viewportHeight = global.innerHeight ?? global.document?.documentElement?.clientHeight ?? 0;
+        const scrollingElement = global.document?.scrollingElement ?? global.document?.documentElement;
+        const currentTop = global.scrollY ?? global.pageYOffset ?? scrollingElement?.scrollTop ?? 0;
+        const currentLeft = global.scrollX ?? global.pageXOffset ?? scrollingElement?.scrollLeft ?? 0;
+        const targetTop = Math.max(0, currentTop + rect.bottom - viewportHeight + 16);
+
+        global.scrollTo({
+          top: targetTop,
+          left: currentLeft,
+          behavior: "smooth"
+        });
+        return;
+      }
+
+      boardRoot.scrollIntoView?.({
         block: "end",
         inline: "nearest",
         behavior: "smooth"
       });
     };
 
-    if (typeof global.requestAnimationFrame === "function") {
-      global.requestAnimationFrame(scroll);
-    } else {
+    const runScroll = () => {
       scroll();
+      global.setTimeout?.(scroll, 120);
+    };
+
+    if (typeof global.requestAnimationFrame === "function") {
+      global.requestAnimationFrame(() => {
+        if (typeof global.requestAnimationFrame === "function") {
+          global.requestAnimationFrame(runScroll);
+        } else {
+          runScroll();
+        }
+      });
+    } else {
+      runScroll();
     }
 
     return true;
@@ -788,6 +844,8 @@
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
+    unlockAudioFromUserGesture,
+    installAudioUnlockHandlers,
     clearHintCellClasses,
     applyHintStage,
     createHintController,
@@ -810,6 +868,7 @@
   };
 
   if (global.document) {
+    installAudioUnlockHandlers(global.document);
     renderInitialScreen(global.document.querySelector("#game-root"));
   }
 })(globalThis);
