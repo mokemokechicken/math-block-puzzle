@@ -44,6 +44,13 @@ test("mobile layout reserves bottom space for browser controls", () => {
   assert.match(css, /min-height: 100svh;/);
 });
 
+test("mobile layout lets the progress meter use the full toolbar width", () => {
+  const css = readFileSync("src/styles.css", "utf8");
+
+  assert.match(css, /\.progress-meter\s*{[^}]*min-width: 170px;/s);
+  assert.match(css, /@media \(max-width: 520px\)\s*{[\s\S]*\.game-counters,\s*\.progress-meter\s*{[^}]*width: 100%;/s);
+});
+
 test("initial renderer mounts visible app markup into #game-root", () => {
   const root = { innerHTML: "" };
 

@@ -162,7 +162,23 @@ test("game panel exposes level selection, progress, and audio control", () => {
   assert.match(markup, /data-level-id="1"/);
   assert.match(markup, /aria-pressed="true"/);
   assert.match(markup, /0 \/ 5/);
+  assert.match(markup, /role="progressbar"/);
+  assert.match(markup, /aria-label="ステージ進捗"/);
+  assert.match(markup, /aria-valuenow="0"/);
+  assert.match(markup, /aria-valuemax="5"/);
+  assert.match(markup, /--progress-percent: 0%/);
   assert.match(markup, /data-audio-toggle/);
+  assert.doesNotMatch(markup, /こ見つかる/);
+  assert.doesNotMatch(markup, /盤面の正解候補数/);
+});
+
+test("game panel progress bar reflects completed answers", () => {
+  const state = createGameState({ levelId: 1, seed: 1, correctCount: 3 });
+  const markup = createGamePanelMarkup(state);
+
+  assert.match(markup, /3 \/ 5/);
+  assert.match(markup, /aria-valuenow="3"/);
+  assert.match(markup, /--progress-percent: 60%/);
 });
 
 test("global audio unlock handlers prepare sound on the first page gesture", () => {

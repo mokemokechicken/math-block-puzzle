@@ -204,6 +204,32 @@
     `;
   }
 
+  function createProgressMarkup(state) {
+    const targetCount = Math.max(1, Number(state.level.clearAnswerCount) || 1);
+    const currentCount = Math.max(0, Math.min(Number(state.correctCount) || 0, targetCount));
+    const progressPercent = Math.round((currentCount / targetCount) * 10000) / 100;
+
+    return `
+      <div
+        class="progress-meter"
+        role="progressbar"
+        aria-label="ステージ進捗"
+        aria-valuemin="0"
+        aria-valuemax="${targetCount}"
+        aria-valuenow="${currentCount}"
+        style="--progress-percent: ${progressPercent}%"
+      >
+        <div class="progress-meter__header">
+          <span class="progress-meter__label">進捗</span>
+          <span class="progress-meter__value">${currentCount} / ${targetCount}</span>
+        </div>
+        <div class="progress-meter__track" aria-hidden="true">
+          <div class="progress-meter__fill"></div>
+        </div>
+      </div>
+    `;
+  }
+
   function createGamePanelMarkup(state) {
     return `
       <section class="game-panel" data-game-panel data-current-level-id="${state.level.id}">
@@ -217,14 +243,7 @@
             <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
           </div>
           <div class="game-counters">
-            <div class="progress-count" aria-label="正解数">
-              <span>${state.correctCount} / ${state.level.clearAnswerCount}</span>
-              <small>正解</small>
-            </div>
-            <div class="answer-count" aria-label="盤面の正解候補数">
-              <span>${state.allAnswers.length}</span>
-              <small>こ見つかる</small>
-            </div>
+            ${createProgressMarkup(state)}
           </div>
         </div>
         ${state.completed ? createClearMarkup(state) : `
