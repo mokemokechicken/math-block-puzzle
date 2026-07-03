@@ -163,14 +163,6 @@ h1 {
   box-shadow: var(--shadow);
 }
 
-.progress-count {
-  display: grid;
-  place-items: center;
-  min-width: 72px;
-  color: #1d4ed8;
-  font-weight: 700;
-}
-
 .status-label {
   margin: 0 0 4px;
   color: var(--accent);
@@ -187,28 +179,47 @@ h1 {
   overflow-wrap: anywhere;
 }
 
-.answer-count {
+.progress-meter {
   display: grid;
-  place-items: center;
-  min-width: 72px;
-  color: var(--accent);
-  font-weight: 700;
+  gap: 8px;
+  width: min(30vw, 220px);
+  min-width: 170px;
 }
 
-.answer-count span {
-  font-size: 1.7rem;
-  line-height: 1;
+.progress-meter__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.progress-count span {
-  font-size: 1.35rem;
-  line-height: 1;
-}
-
-.progress-count small,
-.answer-count small {
+.progress-meter__label {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.progress-meter__value {
+  color: #1d4ed8;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.progress-meter__track {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: #dbeafe;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.08);
+}
+
+.progress-meter__fill {
+  width: var(--progress-percent, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #1d4ed8);
+  transition: width 180ms ease;
 }
 
 .clear-panel {
@@ -446,6 +457,11 @@ h1 {
   .game-toolbar {
     align-items: start;
     flex-direction: column;
+  }
+
+  .game-counters,
+  .progress-meter {
+    width: 100%;
   }
 
   .game-controls {
