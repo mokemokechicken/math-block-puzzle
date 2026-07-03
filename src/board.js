@@ -19,7 +19,7 @@
     isEquationTarget
   } = config;
 
-  const { evaluateEquation } = rules;
+  const { L_SHAPE_DIRECTION_ID, evaluateEquation } = rules;
 
   function createSeededRandom(seed = Date.now()) {
     let state = Number(seed) >>> 0;
@@ -93,6 +93,59 @@
 
           if (cells) {
             placements.push({ directionId, cells });
+          }
+        }
+      }
+    }
+
+    return placements;
+  }
+
+  function isLShapeTurn(firstDirection, secondDirection) {
+    return (
+      (firstDirection.rowStep === 0 && secondDirection.colStep === 0) ||
+      (firstDirection.colStep === 0 && secondDirection.rowStep === 0)
+    );
+  }
+
+  function listLShapePlacements(board, length) {
+    if (length !== 3) {
+      return [];
+    }
+
+    const placements = [];
+    const directions = Object.values(config.DIRECTIONS);
+
+    for (let row = 0; row < board.length; row += 1) {
+      for (let col = 0; col < board[0].length; col += 1) {
+        for (const firstDirection of directions) {
+          const middleRow = row + firstDirection.rowStep;
+          const middleCol = col + firstDirection.colStep;
+
+          if (!isWithinBoard(board, middleRow, middleCol)) {
+            continue;
+          }
+
+          for (const secondDirection of directions) {
+            if (!isLShapeTurn(firstDirection, secondDirection)) {
+              continue;
+            }
+
+            const endRow = middleRow + secondDirection.rowStep;
+            const endCol = middleCol + secondDirection.colStep;
+
+            if (!isWithinBoard(board, endRow, endCol)) {
+              continue;
+            }
+
+            placements.push({
+              directionId: L_SHAPE_DIRECTION_ID,
+              cells: [
+                board[row][col],
+                board[middleRow][middleCol],
+                board[endRow][endCol]
+              ]
+            });
           }
         }
       }
@@ -196,7 +249,7 @@
   function collectPreservedAnswerCellKeys(board, level, refillCellKeys) {
     const preservedCellKeys = new Set();
 
-    for (const answer of scanBoardForAnswers(board, level)) {
+    for (const answer of scanBoardForAnswers(board, level, level.guaranteedDirections, { targetOnly: true })) {
       if (answer.cells.some((cell) => refillCellKeys.has(getCellKey(cell)))) {
         continue;
       }
@@ -541,7 +594,12 @@
   function scanBoardForAnswers(board, levelInput, directionIds = null, options = {}) {
     const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
     const scanDirectionIds = directionIds ?? level.validationDirections;
-    const placements = listLinePlacements(board, scanDirectionIds, level.selectionLength);
+    const lineDirectionIds = scanDirectionIds.filter((directionId) => directionId !== L_SHAPE_DIRECTION_ID);
+    const shouldScanLShapes = directionIds === null || scanDirectionIds.includes(L_SHAPE_DIRECTION_ID);
+    const placements = [
+      ...listLinePlacements(board, lineDirectionIds, level.selectionLength),
+      ...(shouldScanLShapes ? listLShapePlacements(board, level.selectionLength) : [])
+    ];
     const acceptsEquation = options.targetOnly ? isEquationTarget : isEquationAllowed;
     const answers = [];
 
@@ -637,6 +695,7 @@
     createEmptyBoard,
     cloneBoard,
     getLineCells,
+    listLShapePlacements,
     listLinePlacements,
     restoreGuaranteedAnswers,
     refillCells,

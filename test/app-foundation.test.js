@@ -25,7 +25,7 @@ test("index.html loads the initial app assets", () => {
 test("main script renders the initial placeholder copy", () => {
   const source = readFileSync("src/main.js", "utf8");
 
-  assert.match(source, /縦か横に 3 個/);
+  assert.match(source, /縦・横・L字に 3 個/);
   assert.match(source, /data-game-board/);
 });
 
@@ -58,7 +58,7 @@ test("initial renderer mounts visible app markup into #game-root", () => {
 
   assert.match(root.innerHTML, /game-toolbar/);
   assert.match(root.innerHTML, /game-board/);
-  assert.match(root.innerHTML, /縦か横に 3 個/);
+  assert.match(root.innerHTML, /縦・横・L字に 3 個/);
   assert.match(root.innerHTML, /data-cell-id="0:0"/);
 });
 

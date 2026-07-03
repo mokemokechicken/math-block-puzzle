@@ -240,7 +240,7 @@
         <div class="game-toolbar" aria-label="ゲーム状態">
           <div>
             <p class="status-label">${state.level.name}</p>
-            <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
+            <p class="status-text" data-status-text>縦・横・L字に 3 個なぞってください</p>
           </div>
           <div class="game-counters">
             ${createProgressMarkup(state)}

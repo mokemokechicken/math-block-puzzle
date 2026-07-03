@@ -66,7 +66,15 @@ test("extendSelection accepts straight adjacent cells up to max length", () => {
   assert.deepEqual(capped.map((item) => item.id), ["0:0", "0:1", "0:2"]);
 });
 
-test("extendSelection ignores diagonal, skipped, and bent movement", () => {
+test("extendSelection accepts one L-shaped turn at the third cell", () => {
+  const selection = [cell(0, 0)];
+  const two = extendSelection(selection, cell(0, 1), { maxLength: 3 });
+  const three = extendSelection(two, cell(1, 1), { maxLength: 3 });
+
+  assert.deepEqual(three.map((item) => item.id), ["0:0", "0:1", "1:1"]);
+});
+
+test("extendSelection ignores diagonal and skipped movement", () => {
   assert.deepEqual(
     extendSelection([cell(0, 0)], cell(1, 1), { maxLength: 3 }).map((item) => item.id),
     ["0:0"]
@@ -74,10 +82,6 @@ test("extendSelection ignores diagonal, skipped, and bent movement", () => {
   assert.deepEqual(
     extendSelection([cell(0, 0)], cell(0, 2), { maxLength: 3 }).map((item) => item.id),
     ["0:0"]
-  );
-  assert.deepEqual(
-    extendSelection([cell(0, 0), cell(0, 1)], cell(1, 1), { maxLength: 3 }).map((item) => item.id),
-    ["0:0", "0:1"]
   );
 });
 
@@ -169,6 +173,33 @@ test("pointer controller emits selection changes and completion", () => {
   assert.equal(root.listenerCount(), 0);
 });
 
+test("pointer controller emits L-shaped selection changes and completion", () => {
+  const root = createFakeRoot();
+  const changes = [];
+  let completed = null;
+  let currentCell = null;
+  const controller = createPointerDragController({
+    root,
+    getCellFromEvent: () => currentCell,
+    onSelectionChange: (selection) => changes.push(selection.map((item) => item.id)),
+    onSelectionComplete: (selection) => {
+      completed = selection.map((item) => item.id);
+    }
+  });
+
+  currentCell = cell(0, 0);
+  root.dispatch("pointerdown");
+  currentCell = cell(0, 1);
+  root.dispatch("pointermove");
+  currentCell = cell(1, 1);
+  root.dispatch("pointermove");
+  root.dispatch("pointerup");
+
+  assert.deepEqual(changes, [["0:0"], ["0:0", "0:1"], ["0:0", "0:1", "1:1"]]);
+  assert.deepEqual(completed, ["0:0", "0:1", "1:1"]);
+  controller.destroy();
+});
+
 test("pointer controller emits interaction start on accepted pointerdown", () => {
   const root = createFakeRoot();
   const starts = [];
@@ -213,6 +244,28 @@ test("pointer controller includes the release cell when the last move was skippe
   root.dispatch("pointerup", { pointerId: 1 });
 
   assert.deepEqual(completed, ["0:0", "0:1", "0:2"]);
+});
+
+test("pointer controller includes an L-shaped release cell when the last move was skipped", () => {
+  const root = createFakeRoot();
+  let completed = null;
+  let currentCell = null;
+  createPointerDragController({
+    root,
+    getCellFromEvent: () => currentCell,
+    onSelectionComplete: (selection) => {
+      completed = selection.map((item) => item.id);
+    }
+  });
+
+  currentCell = cell(0, 0);
+  root.dispatch("pointerdown", { pointerId: 1 });
+  currentCell = cell(0, 1);
+  root.dispatch("pointermove", { pointerId: 1 });
+  currentCell = cell(1, 1);
+  root.dispatch("pointerup", { pointerId: 1 });
+
+  assert.deepEqual(completed, ["0:0", "0:1", "1:1"]);
 });
 
 test("pointer controller reconciles skipped backtracking on release", () => {

@@ -13,6 +13,8 @@
     isValidationDirection
   } = config;
 
+  const L_SHAPE_DIRECTION_ID = "l-shape";
+
   function formatExpression(values, operation) {
     const [left, right, answer] = values;
 
@@ -70,6 +72,69 @@
     };
   }
 
+  function getCellKey(cell) {
+    return `${cell.row}:${cell.col}`;
+  }
+
+  function getSelectionPath(cells, level) {
+    const seenCellKeys = new Set();
+    const steps = [];
+
+    for (const cell of cells) {
+      const cellKey = getCellKey(cell);
+
+      if (seenCellKeys.has(cellKey)) {
+        return invalid("duplicate_cell");
+      }
+
+      seenCellKeys.add(cellKey);
+    }
+
+    for (let index = 1; index < cells.length; index += 1) {
+      const previous = cells[index - 1];
+      const current = cells[index];
+      const rowStep = current.row - previous.row;
+      const colStep = current.col - previous.col;
+      const directionId = getDirectionIdForStep(rowStep, colStep);
+
+      if (!directionId) {
+        return invalid(index === 1 ? "not_straight" : "not_consecutive");
+      }
+
+      steps.push({ rowStep, colStep, directionId });
+    }
+
+    const firstStep = steps[0];
+    const isStraight = steps.every((step) => (
+      step.rowStep === firstStep.rowStep && step.colStep === firstStep.colStep
+    ));
+
+    if (isStraight) {
+      if (!isValidationDirection(level, firstStep.directionId)) {
+        return invalid("direction_not_allowed", { directionId: firstStep.directionId });
+      }
+
+      return {
+        valid: true,
+        directionId: firstStep.directionId
+      };
+    }
+
+    const turnsOnce = steps.length === 2 && (
+      (steps[0].rowStep === 0 && steps[1].colStep === 0) ||
+      (steps[0].colStep === 0 && steps[1].rowStep === 0)
+    );
+
+    if (!turnsOnce) {
+      return invalid("not_consecutive", { directionId: firstStep.directionId });
+    }
+
+    return {
+      valid: true,
+      directionId: L_SHAPE_DIRECTION_ID
+    };
+  }
+
   function validateSelection(cells, levelInput) {
     const level = typeof levelInput === "number" ? getLevelConfig(levelInput) : levelInput;
 
@@ -85,27 +150,13 @@
       return invalid("missing_value");
     }
 
-    const rowStep = cells[1].row - cells[0].row;
-    const colStep = cells[1].col - cells[0].col;
-    const directionId = getDirectionIdForStep(rowStep, colStep);
+    const path = getSelectionPath(cells, level);
 
-    if (!directionId) {
-      return invalid("not_straight");
+    if (!path.valid) {
+      return path;
     }
 
-    if (!isValidationDirection(level, directionId)) {
-      return invalid("direction_not_allowed", { directionId });
-    }
-
-    for (let index = 2; index < cells.length; index += 1) {
-      const previous = cells[index - 1];
-      const current = cells[index];
-
-      if (current.row - previous.row !== rowStep || current.col - previous.col !== colStep) {
-        return invalid("not_consecutive", { directionId });
-      }
-    }
-
+    const { directionId } = path;
     const values = cells.map((cell) => cell.value);
     const matched = evaluateEquation(values, level.operations)
       .filter((result) => (
@@ -128,9 +179,11 @@
   }
 
   global.MathBlockPuzzleRules = Object.freeze({
+    L_SHAPE_DIRECTION_ID,
     formatExpression,
     evaluateEquation,
     getDirectionIdForStep,
+    getSelectionPath,
     validateSelection
   });
 })(globalThis);
