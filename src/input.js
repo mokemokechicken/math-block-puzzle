@@ -69,8 +69,13 @@
 
     if (selected.length >= 2) {
       const lockedStep = getStepBetweenCells(selected[0], selected[1]);
+      const continuesStraight = lockedStep.rowStep === step.rowStep && lockedStep.colStep === step.colStep;
+      const turnsAtRightAngle = (
+        (lockedStep.rowStep === 0 && step.colStep === 0) ||
+        (lockedStep.colStep === 0 && step.rowStep === 0)
+      );
 
-      if (lockedStep.rowStep !== step.rowStep || lockedStep.colStep !== step.colStep) {
+      if (!continuesStraight && !turnsAtRightAngle) {
         return selected;
       }
     }

@@ -4,7 +4,13 @@ import "../src/config.js";
 import "../src/rules.js";
 
 const { getLevelConfig, OPERATIONS } = globalThis.MathBlockPuzzleConfig;
-const { evaluateEquation, formatExpression, getDirectionIdForStep, validateSelection } = globalThis.MathBlockPuzzleRules;
+const {
+  L_SHAPE_DIRECTION_ID,
+  evaluateEquation,
+  formatExpression,
+  getDirectionIdForStep,
+  validateSelection
+} = globalThis.MathBlockPuzzleRules;
 
 function cell(row, col, value) {
   return { id: `${row}:${col}`, row, col, value };
@@ -60,6 +66,42 @@ test("subtraction respects selection order", () => {
   });
 });
 
+test("L-shaped addition and subtraction selections are valid", () => {
+  const level = getLevelConfig(4);
+  const addition = validateSelection([
+    cell(0, 0, 5),
+    cell(0, 1, 4),
+    cell(1, 1, 9)
+  ], level);
+  const subtraction = validateSelection([
+    cell(0, 0, 9),
+    cell(1, 0, 4),
+    cell(1, 1, 5)
+  ], level);
+
+  assert.equal(addition.valid, true);
+  assert.equal(addition.directionId, L_SHAPE_DIRECTION_ID);
+  assert.equal(addition.expression, "5 + 4 = 9");
+  assert.equal(subtraction.valid, true);
+  assert.equal(subtraction.directionId, L_SHAPE_DIRECTION_ID);
+  assert.equal(subtraction.expression, "9 - 4 = 5");
+});
+
+test("L-shaped selections still require the equation to match", () => {
+  const result = validateSelection([
+    cell(0, 0, 4),
+    cell(0, 1, 9),
+    cell(1, 1, 5)
+  ], getLevelConfig(4));
+
+  assert.deepEqual(result, {
+    valid: false,
+    reason: "equation_not_satisfied",
+    directionId: L_SHAPE_DIRECTION_ID,
+    values: [4, 9, 5]
+  });
+});
+
 test("carry and borrowing levels accept visible arithmetic outside the learning target", () => {
   const level7Result = validateSelection([
     cell(0, 0, 1),
@@ -99,6 +141,7 @@ test("invalid selections fail with specific reasons", () => {
   assert.equal(validateSelection([cell(0, 0, 1), cell(0, 1, 2)], level).reason, "selection_length");
   assert.equal(validateSelection([cell(0, 0, 1), cell(1, 1, 2), cell(2, 2, 3)], level).reason, "not_straight");
   assert.equal(validateSelection([cell(0, 0, 1), cell(0, 1, 2), cell(0, 3, 3)], level).reason, "not_consecutive");
+  assert.equal(validateSelection([cell(0, 0, 1), cell(0, 1, 2), cell(0, 0, 1)], level).reason, "duplicate_cell");
   assert.equal(validateSelection([cell(0, 0, 1), { row: 0, col: 1 }, cell(0, 2, 3)], level).reason, "missing_value");
 });
 
