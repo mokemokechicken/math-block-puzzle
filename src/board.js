@@ -20,6 +20,7 @@
   } = config;
 
   const { L_SHAPE_DIRECTION_ID, evaluateEquation } = rules;
+  const DEFAULT_HEAT_THRESHOLD_PASSES = Object.freeze([1, 1.75, Infinity]);
 
   function createSeededRandom(seed = Date.now()) {
     let state = Number(seed) >>> 0;
@@ -49,6 +50,62 @@
 
   function getCellSetKey(cells) {
     return cells.map(getCellKey).sort().join("|");
+  }
+
+  function getAnswerHeat(answerHeatMap, cell) {
+    if (!answerHeatMap) {
+      return 0;
+    }
+
+    const key = getCellKey(cell);
+    const value = typeof answerHeatMap.get === "function"
+      ? answerHeatMap.get(key)
+      : answerHeatMap[key];
+    const heat = Number(value);
+
+    return Number.isFinite(heat) ? heat : 0;
+  }
+
+  function hasAnswerHeat(answerHeatMap) {
+    if (!answerHeatMap) {
+      return false;
+    }
+
+    const values = typeof answerHeatMap.values === "function"
+      ? Array.from(answerHeatMap.values())
+      : Object.values(answerHeatMap);
+
+    return values.some((value) => Number(value) > 0);
+  }
+
+  function normalizeHeatThresholds(answerHeatMap, thresholds = DEFAULT_HEAT_THRESHOLD_PASSES) {
+    if (!hasAnswerHeat(answerHeatMap)) {
+      return [Infinity];
+    }
+
+    const normalized = (Array.isArray(thresholds) && thresholds.length > 0
+      ? thresholds
+      : DEFAULT_HEAT_THRESHOLD_PASSES)
+      .map((threshold) => Number(threshold))
+      .filter((threshold) => threshold > 0);
+
+    if (!normalized.some((threshold) => !Number.isFinite(threshold))) {
+      normalized.push(Infinity);
+    }
+
+    return normalized;
+  }
+
+  function getPlacementHeatScore(placement, answerHeatMap) {
+    return placement.cells.reduce((score, cell) => score + getAnswerHeat(answerHeatMap, cell), 0);
+  }
+
+  function isPlacementHeatBlocked(placement, answerHeatMap, heatThreshold) {
+    if (!Number.isFinite(heatThreshold)) {
+      return false;
+    }
+
+    return placement.cells.some((cell) => getAnswerHeat(answerHeatMap, cell) >= heatThreshold);
   }
 
   function createEmptyBoard(width, height) {
@@ -286,9 +343,15 @@
     return new Set([getCellSetKey(cells)]);
   }
 
-  function scanBoardForAllowedAnswers(board, level, directionIds, blockedAnswerCellSetKeys) {
+  function scanBoardForAllowedAnswers(board, level, directionIds, blockedAnswerCellSetKeys, options = {}) {
+    const answerHeatMap = options.answerHeatMap ?? null;
+    const heatThreshold = options.heatThreshold ?? Infinity;
+
     return scanBoardForAnswers(board, level, directionIds, { targetOnly: true })
-      .filter((answer) => !answerUsesBlockedCellSet(answer, blockedAnswerCellSetKeys));
+      .filter((answer) => (
+        !answerUsesBlockedCellSet(answer, blockedAnswerCellSetKeys) &&
+        !isPlacementHeatBlocked(answer, answerHeatMap, heatThreshold)
+      ));
   }
 
   function scanBoardForBlockedAnswers(board, level, blockedAnswerCellSetKeys) {
@@ -323,8 +386,20 @@
     return createsBlockedAnswer;
   }
 
-  function createGuaranteePlan(placement, equation, protectedCellKeys, refillCellKeys, blockedAnswerCellSetKeys) {
+  function createGuaranteePlan(
+    placement,
+    equation,
+    protectedCellKeys,
+    refillCellKeys,
+    blockedAnswerCellSetKeys,
+    answerHeatMap,
+    heatThreshold
+  ) {
     if (isPlacementBlocked(placement, blockedAnswerCellSetKeys)) {
+      return null;
+    }
+
+    if (isPlacementHeatBlocked(placement, answerHeatMap, heatThreshold)) {
       return null;
     }
 
@@ -360,7 +435,8 @@
       placement,
       equation,
       changes,
-      outsideRefillChangeCount
+      outsideRefillChangeCount,
+      heatScore: getPlacementHeatScore(placement, answerHeatMap)
     };
   }
 
@@ -373,10 +449,22 @@
       return candidate.changes.length < current.changes.length;
     }
 
-    return candidate.outsideRefillChangeCount < current.outsideRefillChangeCount;
+    if (candidate.outsideRefillChangeCount !== current.outsideRefillChangeCount) {
+      return candidate.outsideRefillChangeCount < current.outsideRefillChangeCount;
+    }
+
+    return candidate.heatScore < current.heatScore;
   }
 
-  function findGuaranteePlan(board, level, protectedCellKeys, refillCellKeys, blockedAnswerCellSetKeys) {
+  function findGuaranteePlan(
+    board,
+    level,
+    protectedCellKeys,
+    refillCellKeys,
+    blockedAnswerCellSetKeys,
+    answerHeatMap,
+    heatThreshold
+  ) {
     const placements = listLinePlacements(board, level.guaranteedDirections, level.selectionLength);
     const equations = listEquationCandidates(level);
     let bestPlan = null;
@@ -388,7 +476,9 @@
           equation,
           protectedCellKeys,
           refillCellKeys,
-          blockedAnswerCellSetKeys
+          blockedAnswerCellSetKeys,
+          answerHeatMap,
+          heatThreshold
         );
 
         if (
@@ -409,13 +499,17 @@
     level,
     protectedCellKeys,
     refillCellKeys,
-    blockedAnswerCellSetKeys = new Set()
+    blockedAnswerCellSetKeys = new Set(),
+    options = {}
   ) {
+    const answerHeatMap = options.answerHeatMap ?? null;
+    const heatThreshold = options.heatThreshold ?? Infinity;
     let guaranteedAnswers = scanBoardForAllowedAnswers(
       board,
       level,
       level.guaranteedDirections,
-      blockedAnswerCellSetKeys
+      blockedAnswerCellSetKeys,
+      { answerHeatMap, heatThreshold }
     );
 
     while (guaranteedAnswers.length < level.guaranteedAnswerCount) {
@@ -427,7 +521,9 @@
         level,
         protectedCellKeys,
         refillCellKeys,
-        blockedAnswerCellSetKeys
+        blockedAnswerCellSetKeys,
+        answerHeatMap,
+        heatThreshold
       );
 
       if (!plan) {
@@ -446,7 +542,8 @@
         board,
         level,
         level.guaranteedDirections,
-        blockedAnswerCellSetKeys
+        blockedAnswerCellSetKeys,
+        { answerHeatMap, heatThreshold }
       );
 
       if (guaranteedAnswers.length <= previousCount) {
@@ -520,36 +617,53 @@
     }
   }
 
-  function restoreRefillConstraints(board, level, protectedCellKeys, refillCellKeys, blockedAnswerCellSetKeys) {
+  function restoreRefillConstraints(
+    board,
+    level,
+    protectedCellKeys,
+    refillCellKeys,
+    blockedAnswerCellSetKeys,
+    options = {}
+  ) {
+    const answerHeatMap = options.answerHeatMap ?? null;
+    const heatThresholds = normalizeHeatThresholds(answerHeatMap, options.heatThresholds);
     let guaranteedAnswers = scanBoardForAllowedAnswers(
       board,
       level,
       level.guaranteedDirections,
-      blockedAnswerCellSetKeys
+      blockedAnswerCellSetKeys,
+      {
+        answerHeatMap,
+        heatThreshold: heatThresholds[0]
+      }
     );
 
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      breakBlockedAnswers(board, level, refillCellKeys, protectedCellKeys, blockedAnswerCellSetKeys);
-      guaranteedAnswers = restoreGuaranteedAnswers(
-        board,
-        level,
-        protectedCellKeys,
-        refillCellKeys,
-        blockedAnswerCellSetKeys
-      );
-      breakBlockedAnswers(board, level, refillCellKeys, protectedCellKeys, blockedAnswerCellSetKeys);
-      guaranteedAnswers = scanBoardForAllowedAnswers(
-        board,
-        level,
-        level.guaranteedDirections,
-        blockedAnswerCellSetKeys
-      );
+    for (const heatThreshold of heatThresholds) {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        breakBlockedAnswers(board, level, refillCellKeys, protectedCellKeys, blockedAnswerCellSetKeys);
+        guaranteedAnswers = restoreGuaranteedAnswers(
+          board,
+          level,
+          protectedCellKeys,
+          refillCellKeys,
+          blockedAnswerCellSetKeys,
+          { answerHeatMap, heatThreshold }
+        );
+        breakBlockedAnswers(board, level, refillCellKeys, protectedCellKeys, blockedAnswerCellSetKeys);
+        guaranteedAnswers = scanBoardForAllowedAnswers(
+          board,
+          level,
+          level.guaranteedDirections,
+          blockedAnswerCellSetKeys,
+          { answerHeatMap, heatThreshold }
+        );
 
-      if (
-        guaranteedAnswers.length >= level.guaranteedAnswerCount &&
-        scanBoardForBlockedAnswers(board, level, blockedAnswerCellSetKeys).length === 0
-      ) {
-        return guaranteedAnswers;
+        if (
+          guaranteedAnswers.length >= level.guaranteedAnswerCount &&
+          scanBoardForBlockedAnswers(board, level, blockedAnswerCellSetKeys).length === 0
+        ) {
+          return guaranteedAnswers;
+        }
       }
     }
 
@@ -580,7 +694,11 @@
       level,
       protectedCellKeys,
       refillCellKeys,
-      blockedAnswerCellSetKeys
+      blockedAnswerCellSetKeys,
+      {
+        answerHeatMap: options.answerHeatMap ?? null,
+        heatThresholds: options.heatThresholds
+      }
     );
 
     return {

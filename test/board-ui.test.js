@@ -11,6 +11,7 @@ import "../src/main.js";
 
 const {
   createGameState,
+  updateAnswerHeatMap,
   createBoardMarkup,
   createGamePanelMarkup,
   createClearMarkup,
@@ -140,6 +141,27 @@ test("game state creates a generated board for the selected level", () => {
   assert.equal(state.correctCount, 0);
   assert.equal(state.level.clearAnswerCount, 5);
   assert.equal(state.allAnswers.length >= state.guaranteedAnswers.length, true);
+  assert.deepEqual(state.answerHeatMap, {});
+});
+
+test("answer heat map decays old cells and warms selected cells", () => {
+  const heatMap = updateAnswerHeatMap(
+    {
+      "0:0": 1,
+      "3:3": 0.04
+    },
+    [
+      { row: 0, col: 1 },
+      { row: 0, col: 2 },
+      { row: 0, col: 3 }
+    ]
+  );
+
+  assert.equal(heatMap["0:0"], 0.75);
+  assert.equal(heatMap["0:1"], 1);
+  assert.equal(heatMap["0:2"], 1);
+  assert.equal(heatMap["0:3"], 1);
+  assert.equal("3:3" in heatMap, false);
 });
 
 test("board markup exposes cell ids and values for input wiring", () => {
@@ -744,6 +766,47 @@ test("scheduled board refill keeps progress and replaces board values", () => {
     assert.match(root.innerHTML, /data-game-board/);
   } finally {
     clearScheduledBoardRefresh();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("scheduled board refill passes answer heat map to board refill", () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalBoard = globalThis.MathBlockPuzzleBoard;
+  const callbacks = [];
+  const state = createGameState({ levelId: 2, seed: 22 });
+  const answerHeatMap = { "0:0": 1 };
+  const root = { innerHTML: "" };
+  const selectedCells = [
+    state.board[0][0],
+    state.board[0][1],
+    state.board[0][2]
+  ];
+  let capturedOptions = null;
+
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+  globalThis.MathBlockPuzzleBoard = {
+    ...originalBoard,
+    refillCells(board, cells, level, options) {
+      capturedOptions = options;
+      return originalBoard.refillCells(board, cells, level, options);
+    }
+  };
+
+  try {
+    scheduleBoardRefill(root, { ...state, correctCount: 1, answerHeatMap }, selectedCells, 100);
+    callbacks[0]();
+
+    assert.equal(capturedOptions.answerHeatMap, answerHeatMap);
+  } finally {
+    clearScheduledBoardRefresh();
+    globalThis.MathBlockPuzzleBoard = originalBoard;
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }

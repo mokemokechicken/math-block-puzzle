@@ -13,6 +13,9 @@
   let timeAttackVisibilityHandlerInstalled = false;
   const DEFAULT_LEVEL_ID = 1;
   const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
+  const ANSWER_HEAT_DECAY = 0.75;
+  const ANSWER_HEAT_INCREMENT = 1;
+  const ANSWER_HEAT_MINIMUM = 0.05;
   const GAME_MODES = Object.freeze({
     normal: "normal",
     timeAttack: "time-attack"
@@ -115,6 +118,7 @@
       board: generated.board,
       guaranteedAnswers: generated.guaranteedAnswers,
       allAnswers: generated.allAnswers,
+      answerHeatMap: normalizeAnswerHeatMap(options.answerHeatMap),
       correctCount: options.correctCount ?? 0,
       timeAttack: mode === GAME_MODES.timeAttack
         ? (options.timeAttack ?? timeAttack.createTimeAttackState())
@@ -122,6 +126,50 @@
       completed: Boolean(options.completed),
       completionReason: options.completionReason ?? null
     };
+  }
+
+  function getAnswerHeatKey(cell) {
+    return `${cell.row}:${cell.col}`;
+  }
+
+  function normalizeAnswerHeatMap(answerHeatMap) {
+    if (!answerHeatMap) {
+      return {};
+    }
+
+    const entries = typeof answerHeatMap.entries === "function"
+      ? Array.from(answerHeatMap.entries())
+      : Object.entries(answerHeatMap);
+    const normalized = {};
+
+    for (const [key, value] of entries) {
+      const heat = Number(value);
+
+      if (Number.isFinite(heat) && heat >= ANSWER_HEAT_MINIMUM) {
+        normalized[key] = heat;
+      }
+    }
+
+    return normalized;
+  }
+
+  function updateAnswerHeatMap(answerHeatMap, selectedCells) {
+    const nextHeatMap = {};
+
+    for (const [key, value] of Object.entries(normalizeAnswerHeatMap(answerHeatMap))) {
+      const decayed = value * ANSWER_HEAT_DECAY;
+
+      if (decayed >= ANSWER_HEAT_MINIMUM) {
+        nextHeatMap[key] = decayed;
+      }
+    }
+
+    for (const cell of selectedCells) {
+      const key = getAnswerHeatKey(cell);
+      nextHeatMap[key] = (nextHeatMap[key] ?? 0) + ANSWER_HEAT_INCREMENT;
+    }
+
+    return nextHeatMap;
   }
 
   function nextBoardSeed() {
@@ -866,7 +914,8 @@
       }
 
       const refilled = board.refillCells(state.board, cellsToRefill, state.level, {
-        seed: nextBoardSeed()
+        seed: nextBoardSeed(),
+        answerHeatMap: state.answerHeatMap
       });
       let nextState = {
         ...state,
@@ -892,7 +941,8 @@
             ...nextState,
             board: regenerated.board,
             guaranteedAnswers: regenerated.guaranteedAnswers,
-            allAnswers: regenerated.allAnswers
+            allAnswers: regenerated.allAnswers,
+            answerHeatMap: {}
           });
           return;
         }
@@ -971,6 +1021,7 @@
           const nextState = {
             ...state,
             correctCount: state.correctCount + 1,
+            answerHeatMap: updateAnswerHeatMap(state.answerHeatMap, selection),
             timeAttack: nextTimeAttack
           };
           const scoreSuffix = nextTimeAttack ? ` +${nextTimeAttack.lastGain}点` : "";
@@ -1159,6 +1210,8 @@
     createGameState,
     GAME_MODES,
     nextBoardSeed,
+    normalizeAnswerHeatMap,
+    updateAnswerHeatMap,
     normalizeGameMode,
     isTimeAttackMode,
     formatSelectionPreview,

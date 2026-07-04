@@ -289,7 +289,15 @@ test("refill cells restores guarantees without breaking existing disjoint answer
   board[3][1].value = 1;
   board[3][2].value = 2;
 
-  const refilled = refillCells(board, [board[0][0]], level, { random: () => 0.99 });
+  const refilled = refillCells(board, [board[0][0]], level, {
+    random: () => 0.99,
+    answerHeatMap: {
+      "3:0": 2,
+      "3:1": 2,
+      "3:2": 2
+    },
+    heatThresholds: [1, Infinity]
+  });
   const preservedAnswer = refilled.allAnswers.find((answer) => (
     answer.directionId === "left-to-right" &&
     answer.expression === "1 + 1 = 2" &&
@@ -306,6 +314,56 @@ test("refill cells restores guarantees without breaking existing disjoint answer
     cell.id !== "3:2" &&
     cell.value !== 5
   )), true);
+});
+
+test("refill cells avoids hot placements when restoring readable guarantees", () => {
+  const baseLevel = getLevelConfig(1);
+  const level = { ...baseLevel, guaranteedAnswerCount: 1 };
+  const board = createEmptyBoard(4, 4);
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 5;
+    }
+  }
+
+  const refilled = refillCells(board, [board[3][3]], level, {
+    random: () => 0.99,
+    answerHeatMap: {
+      "0:0": 1,
+      "0:1": 1,
+      "0:2": 1,
+      "0:3": 1
+    },
+    heatThresholds: [1, Infinity]
+  });
+
+  assert.equal(refilled.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
+  assert.equal(refilled.guaranteedAnswers.every((answer) => (
+    answer.cells.every((cell) => cell.row !== 0)
+  )), true);
+});
+
+test("refill cells relaxes heat avoidance when every placement is hot", () => {
+  const baseLevel = getLevelConfig(1);
+  const level = { ...baseLevel, guaranteedAnswerCount: 1 };
+  const board = createEmptyBoard(4, 4);
+  const answerHeatMap = {};
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 5;
+      answerHeatMap[boardCell.id] = 1;
+    }
+  }
+
+  const refilled = refillCells(board, [board[3][3]], level, {
+    random: () => 0.99,
+    answerHeatMap,
+    heatThresholds: [1, Infinity]
+  });
+
+  assert.equal(refilled.guaranteedAnswers.length >= level.guaranteedAnswerCount, true);
 });
 
 test("seeded random produces repeatable values", () => {
