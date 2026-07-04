@@ -65,6 +65,27 @@ test("QA contract: reverse horizontal and upward selections are accepted", () =>
   assert.equal(bottomToTop.expression, "5 + 4 = 9");
 });
 
+test("QA contract: L-shaped selections are accepted", () => {
+  const level = getLevelConfig(4);
+  const addition = validateSelection([
+    cell(0, 0, 5),
+    cell(0, 1, 4),
+    cell(1, 1, 9)
+  ], level);
+  const subtraction = validateSelection([
+    cell(0, 0, 9),
+    cell(1, 0, 4),
+    cell(1, 1, 5)
+  ], level);
+
+  assert.equal(addition.valid, true);
+  assert.equal(addition.directionId, "l-shape");
+  assert.equal(addition.expression, "5 + 4 = 9");
+  assert.equal(subtraction.valid, true);
+  assert.equal(subtraction.directionId, "l-shape");
+  assert.equal(subtraction.expression, "9 - 4 = 5");
+});
+
 test("QA contract: level 7 accepts non-carry addition when it is visible arithmetic", () => {
   const result = validateSelection([
     cell(0, 0, 1),

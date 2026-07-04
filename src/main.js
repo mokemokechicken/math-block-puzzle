@@ -5,9 +5,16 @@
   let boardSeed = 20260701;
   let boardRefreshTimer = null;
   let boardRefreshToken = 0;
+  let timeAttackTimer = null;
+  let timeAttackTimerState = null;
+  let timeAttackTimerToken = 0;
   let audioUnlockHandlersInstalled = false;
   const DEFAULT_LEVEL_ID = 1;
   const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
+  const GAME_MODES = Object.freeze({
+    normal: "normal",
+    timeAttack: "time-attack"
+  });
   const HINT_CELL_CLASSES = ["is-hint-source", "is-hint-answer", "is-hint-line"];
   const AUDIO_UNLOCK_EVENTS = ["pointerdown", "touchstart", "mousedown", "click", "keydown"];
 
@@ -51,7 +58,8 @@
       MathBlockPuzzleConfig,
       MathBlockPuzzleHints,
       MathBlockPuzzleInput,
-      MathBlockPuzzleRules
+      MathBlockPuzzleRules,
+      MathBlockPuzzleTimeAttack
     } = global;
 
     if (
@@ -59,7 +67,8 @@
       !MathBlockPuzzleConfig ||
       !MathBlockPuzzleHints ||
       !MathBlockPuzzleInput ||
-      !MathBlockPuzzleRules
+      !MathBlockPuzzleRules ||
+      !MathBlockPuzzleTimeAttack
     ) {
       throw new Error("Math block puzzle dependencies are not loaded");
     }
@@ -69,13 +78,28 @@
       config: MathBlockPuzzleConfig,
       hints: MathBlockPuzzleHints,
       input: MathBlockPuzzleInput,
-      rules: MathBlockPuzzleRules
+      rules: MathBlockPuzzleRules,
+      timeAttack: MathBlockPuzzleTimeAttack
     };
   }
 
+  function getNow() {
+    return Number(global.Date?.now?.() ?? Date.now());
+  }
+
+  function normalizeGameMode(mode) {
+    return mode === GAME_MODES.timeAttack ? GAME_MODES.timeAttack : GAME_MODES.normal;
+  }
+
+  function isTimeAttackMode(state) {
+    return state.mode === GAME_MODES.timeAttack;
+  }
+
   function createGameState(options = {}) {
-    const { board, config } = getDependencies();
+    const { board, config, timeAttack } = getDependencies();
     const level = config.getLevelConfig(options.levelId ?? DEFAULT_LEVEL_ID);
+    const mode = normalizeGameMode(options.mode);
+    const now = options.now ?? getNow();
     const generated = options.board ? {
       board: options.board,
       guaranteedAnswers: board.scanBoardForAnswers(options.board, level, level.guaranteedDirections, {
@@ -86,10 +110,14 @@
 
     return {
       level,
+      mode,
       board: generated.board,
       guaranteedAnswers: generated.guaranteedAnswers,
       allAnswers: generated.allAnswers,
       correctCount: options.correctCount ?? 0,
+      timeAttack: mode === GAME_MODES.timeAttack
+        ? (options.timeAttack ?? timeAttack.createTimeAttackState(now))
+        : null,
       completed: Boolean(options.completed),
       completionReason: options.completionReason ?? null
     };
@@ -176,7 +204,38 @@
     `;
   }
 
+  function createModeSelectorMarkup(state) {
+    return `
+      <div class="mode-selector" aria-label="ゲームモード">
+        <button
+          type="button"
+          class="mode-button${state.mode === GAME_MODES.normal ? " is-active" : ""}"
+          data-game-mode="${GAME_MODES.normal}"
+          aria-pressed="${state.mode === GAME_MODES.normal ? "true" : "false"}"
+        >通常</button>
+        <button
+          type="button"
+          class="mode-button${state.mode === GAME_MODES.timeAttack ? " is-active" : ""}"
+          data-game-mode="${GAME_MODES.timeAttack}"
+          aria-pressed="${state.mode === GAME_MODES.timeAttack ? "true" : "false"}"
+        >1分アタック</button>
+      </div>
+    `;
+  }
+
+  function getCompletionLabel(state) {
+    if (state.completionReason === "time-up") {
+      return "タイムアップ";
+    }
+
+    return "クリア";
+  }
+
   function getCompletionMessage(state) {
+    if (state.completionReason === "time-up") {
+      return `最終スコア ${state.timeAttack?.score ?? 0}点`;
+    }
+
     if (state.completionReason === "no-answers") {
       return "候補をすべて見つけました";
     }
@@ -190,7 +249,7 @@
 
     return `
       <section class="clear-panel" data-clear-panel>
-        <p class="status-label">クリア</p>
+        <p class="status-label">${getCompletionLabel(state)}</p>
         <p class="clear-text">${getCompletionMessage(state)}</p>
         <div class="clear-actions">
           <button type="button" class="clear-action" data-retry-level>もう一回</button>
@@ -204,27 +263,78 @@
     `;
   }
 
+  function createTimeAttackStatsMarkup(state) {
+    const { timeAttack } = getDependencies();
+    const remainingMs = timeAttack.getRemainingMs(state.timeAttack, getNow());
+    const remainingPercent = Math.round((remainingMs / timeAttack.DURATION_MS) * 10000) / 100;
+    const lastGainText = state.timeAttack.lastGain > 0 ? `+${state.timeAttack.lastGain}` : "-";
+
+    return `
+      <div class="time-attack-stats" aria-label="タイムアタック状態">
+        <div class="time-attack-stat is-time">
+          <span class="time-attack-stat__label">残り</span>
+          <span class="time-attack-stat__value" data-time-remaining>${timeAttack.formatRemainingSeconds(remainingMs)}</span>
+        </div>
+        <div class="time-attack-stat">
+          <span class="time-attack-stat__label">スコア</span>
+          <span class="time-attack-stat__value" data-time-score>${state.timeAttack.score}</span>
+        </div>
+        <div class="time-attack-stat">
+          <span class="time-attack-stat__label">倍率</span>
+          <span class="time-attack-stat__value" data-time-multiplier>${timeAttack.formatMultiplier(state.timeAttack.cumulativeMultiplier)}</span>
+        </div>
+        <div class="time-attack-stat">
+          <span class="time-attack-stat__label">直近</span>
+          <span class="time-attack-stat__value" data-time-gain>${lastGainText}</span>
+        </div>
+        <div class="time-attack-track" aria-hidden="true">
+          <div class="time-attack-fill" data-time-fill style="--time-percent: ${remainingPercent}%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function createProgressMarkup(state) {
+    const targetCount = Math.max(1, Number(state.level.clearAnswerCount) || 1);
+    const currentCount = Math.max(0, Math.min(Number(state.correctCount) || 0, targetCount));
+    const progressPercent = Math.round((currentCount / targetCount) * 10000) / 100;
+
+    return `
+      <div
+        class="progress-meter"
+        role="progressbar"
+        aria-label="ステージ進捗"
+        aria-valuemin="0"
+        aria-valuemax="${targetCount}"
+        aria-valuenow="${currentCount}"
+        style="--progress-percent: ${progressPercent}%"
+      >
+        <div class="progress-meter__header">
+          <span class="progress-meter__label">進捗</span>
+          <span class="progress-meter__value">${currentCount} / ${targetCount}</span>
+        </div>
+        <div class="progress-meter__track" aria-hidden="true">
+          <div class="progress-meter__fill"></div>
+        </div>
+      </div>
+    `;
+  }
+
   function createGamePanelMarkup(state) {
     return `
       <section class="game-panel" data-game-panel data-current-level-id="${state.level.id}">
         <div class="game-controls">
           ${createLevelSelectorMarkup(state)}
+          ${createModeSelectorMarkup(state)}
           ${createAudioToggleMarkup()}
         </div>
         <div class="game-toolbar" aria-label="ゲーム状態">
           <div>
             <p class="status-label">${state.level.name}</p>
-            <p class="status-text" data-status-text>縦か横に 3 個なぞってください</p>
+            <p class="status-text" data-status-text>${isTimeAttackMode(state) ? "1分でハイスコアを狙おう" : "縦・横・L字に 3 個なぞってください"}</p>
           </div>
           <div class="game-counters">
-            <div class="progress-count" aria-label="正解数">
-              <span>${state.correctCount} / ${state.level.clearAnswerCount}</span>
-              <small>正解</small>
-            </div>
-            <div class="answer-count" aria-label="盤面の正解候補数">
-              <span>${state.allAnswers.length}</span>
-              <small>こ見つかる</small>
-            </div>
+            ${isTimeAttackMode(state) ? createTimeAttackStatsMarkup(state) : createProgressMarkup(state)}
           </div>
         </div>
         ${state.completed ? createClearMarkup(state) : `
@@ -548,6 +658,88 @@
     return boardRefreshToken;
   }
 
+  function clearTimeAttackTimer() {
+    timeAttackTimerToken += 1;
+
+    if (timeAttackTimer !== null) {
+      global.clearInterval?.(timeAttackTimer);
+      timeAttackTimer = null;
+    }
+
+    timeAttackTimerState = null;
+    return timeAttackTimerToken;
+  }
+
+  function syncTimeAttackTimerState(state) {
+    if (isTimeAttackMode(state) && state.timeAttack) {
+      timeAttackTimerState = state;
+      return true;
+    }
+
+    return false;
+  }
+
+  function updateTimeAttackDisplay(root, state) {
+    if (!isTimeAttackMode(state) || !state.timeAttack) {
+      return 0;
+    }
+
+    const { timeAttack } = getDependencies();
+    const remainingMs = timeAttack.getRemainingMs(state.timeAttack, getNow());
+    const remainingPercent = Math.round((remainingMs / timeAttack.DURATION_MS) * 10000) / 100;
+    const remainingElement = root.querySelector("[data-time-remaining]");
+    const scoreElement = root.querySelector("[data-time-score]");
+    const multiplierElement = root.querySelector("[data-time-multiplier]");
+    const gainElement = root.querySelector("[data-time-gain]");
+    const fillElement = root.querySelector("[data-time-fill]");
+
+    setText(remainingElement, timeAttack.formatRemainingSeconds(remainingMs));
+    setText(scoreElement, String(state.timeAttack.score));
+    setText(multiplierElement, timeAttack.formatMultiplier(state.timeAttack.cumulativeMultiplier));
+    setText(gainElement, state.timeAttack.lastGain > 0 ? `+${state.timeAttack.lastGain}` : "-");
+
+    if (fillElement?.style) {
+      fillElement.style.setProperty("--time-percent", `${remainingPercent}%`);
+    }
+
+    return remainingMs;
+  }
+
+  function completeTimeAttack(root, state) {
+    clearTimeAttackTimer();
+    clearScheduledBoardRefresh();
+    playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.clear);
+    renderGameState(root, completeState(state, "time-up"));
+  }
+
+  function startTimeAttackTimer(root, state) {
+    if (!isTimeAttackMode(state) || state.completed) {
+      return;
+    }
+
+    const token = clearTimeAttackTimer();
+    syncTimeAttackTimerState(state);
+
+    const tick = () => {
+      if (token !== timeAttackTimerToken || !timeAttackTimerState) {
+        return;
+      }
+
+      const currentState = timeAttackTimerState;
+      const remainingMs = updateTimeAttackDisplay(root, currentState);
+
+      if (remainingMs <= 0) {
+        completeTimeAttack(root, currentState);
+      }
+    };
+
+    tick();
+
+    if (token === timeAttackTimerToken) {
+      timeAttackTimer = global.setInterval?.(tick, 250) ?? null;
+    }
+  }
+
   function scheduleBoardRefresh(root, levelId, delay = 900) {
     const token = clearScheduledBoardRefresh();
 
@@ -576,7 +768,7 @@
   }
 
   function scheduleBoardRefill(root, state, selectedCells, delay = 900) {
-    const { board } = getDependencies();
+    const { board, timeAttack } = getDependencies();
     const token = clearScheduledBoardRefresh();
     const cellsToRefill = selectedCells.map((cell) => ({
       row: cell.row,
@@ -590,7 +782,12 @@
 
       boardRefreshTimer = null;
 
-      if (state.correctCount >= state.level.clearAnswerCount) {
+      if (isTimeAttackMode(state) && timeAttack.isTimeUp(state.timeAttack, getNow())) {
+        completeTimeAttack(root, state);
+        return;
+      }
+
+      if (!isTimeAttackMode(state) && state.correctCount >= state.level.clearAnswerCount) {
         playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.clear);
         renderGameState(root, completeState(state, "target"));
         return;
@@ -607,6 +804,20 @@
       };
 
       if (nextState.allAnswers.length === 0) {
+        if (isTimeAttackMode(nextState)) {
+          const regenerated = board.generateBoard(nextState.level, {
+            seed: nextBoardSeed()
+          });
+
+          renderGameState(root, {
+            ...nextState,
+            board: regenerated.board,
+            guaranteedAnswers: regenerated.guaranteedAnswers,
+            allAnswers: regenerated.allAnswers
+          });
+          return;
+        }
+
         playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.clear);
         renderGameState(root, completeState(nextState, "no-answers"));
         return;
@@ -623,7 +834,7 @@
       return null;
     }
 
-    const { hints, input, rules } = getDependencies();
+    const { hints, input, rules, timeAttack } = getDependencies();
     const boardRoot = root.querySelector("[data-game-board]");
     const statusText = root.querySelector("[data-status-text]");
     const expressionPreview = root.querySelector("[data-expression-preview]");
@@ -661,17 +872,33 @@
         setText(expressionPreview, formatSelectionPreview(selection, state.level));
       },
       onSelectionComplete: (selection) => {
+        const selectionCompletedAt = getNow();
+
+        if (isTimeAttackMode(state) && timeAttack.isTimeUp(state.timeAttack, selectionCompletedAt)) {
+          hintController.stop();
+          markSelectedCells(boardRoot, []);
+          completeTimeAttack(root, state);
+          return;
+        }
+
         const result = rules.validateSelection(selection, state.level);
 
         setText(expressionPreview, formatSelectionPreview(selection, state.level));
-        setText(statusText, result.valid ? `正解: ${result.expression}` : "もう一度なぞってみよう");
 
         if (result.valid) {
+          const nextTimeAttack = isTimeAttackMode(state)
+            ? timeAttack.applyCorrectAnswer(state.timeAttack, selectionCompletedAt)
+            : null;
           const nextState = {
             ...state,
-            correctCount: state.correctCount + 1
+            correctCount: state.correctCount + 1,
+            timeAttack: nextTimeAttack
           };
+          const scoreSuffix = nextTimeAttack ? ` +${nextTimeAttack.lastGain}点` : "";
 
+          syncTimeAttackTimerState(nextState);
+          setText(statusText, `正解: ${result.expression}${scoreSuffix}`);
+          updateTimeAttackDisplay(root, nextState);
           playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.correct);
           hintController.stop();
           playSuccessAnimation(boardRoot, selection, result.expression);
@@ -679,6 +906,7 @@
           boardRoot.classList.add("is-resolving");
           scheduleBoardRefill(root, nextState, selection, getBoardRefillDelay());
         } else {
+          setText(statusText, "もう一度なぞってみよう");
           playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.incorrect);
           hintController.reset();
         }
@@ -711,6 +939,18 @@
         renderInitialScreen(root, {
           levelId: Number(button.dataset.levelId),
           seed: nextBoardSeed(),
+          mode: state.mode,
+          scrollToBoard: true
+        });
+      });
+    }
+
+    for (const button of root.querySelectorAll("[data-game-mode]")) {
+      button.addEventListener?.("click", () => {
+        renderInitialScreen(root, {
+          levelId: state.level.id,
+          seed: nextBoardSeed(),
+          mode: button.dataset.gameMode,
           scrollToBoard: true
         });
       });
@@ -734,6 +974,7 @@
       renderInitialScreen(root, {
         levelId: state.level.id,
         seed: nextBoardSeed(),
+        mode: state.mode,
         scrollToBoard: true
       });
     });
@@ -742,6 +983,7 @@
       renderInitialScreen(root, {
         levelId: Number(event.currentTarget.dataset.nextLevel),
         seed: nextBoardSeed(),
+        mode: state.mode,
         scrollToBoard: true
       });
     });
@@ -805,6 +1047,7 @@
 
   function renderGameState(root, state) {
     clearScheduledBoardRefresh();
+    clearTimeAttackTimer();
 
     if (activeController) {
       activeController.destroy();
@@ -816,6 +1059,7 @@
 
     if (!state.completed) {
       activeController = setupBoardInput(root, state);
+      startTimeAttackTimer(root, state);
     }
   }
 
@@ -834,12 +1078,17 @@
 
   global.MathBlockPuzzleApp = {
     createGameState,
+    GAME_MODES,
     nextBoardSeed,
+    normalizeGameMode,
+    isTimeAttackMode,
     formatSelectionPreview,
     createBoardMarkup,
     createGamePanelMarkup,
     createLevelSelectorMarkup,
     createAudioToggleMarkup,
+    createModeSelectorMarkup,
+    createTimeAttackStatsMarkup,
     createClearMarkup,
     createInitialMarkup,
     createCellMap,
@@ -857,6 +1106,11 @@
     playSuccessAnimation,
     markClearingCells,
     clearScheduledBoardRefresh,
+    clearTimeAttackTimer,
+    syncTimeAttackTimerState,
+    updateTimeAttackDisplay,
+    completeTimeAttack,
+    startTimeAttackTimer,
     scheduleBoardRefresh,
     scheduleBoardRefill,
     completeState,

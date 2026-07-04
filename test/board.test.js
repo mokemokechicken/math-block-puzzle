@@ -9,6 +9,7 @@ const {
   createEmptyBoard,
   createSeededRandom,
   generateBoard,
+  listLShapePlacements,
   listLinePlacements,
   refillCells,
   scanBoardForAnswers
@@ -42,6 +43,16 @@ test("line placements include only in-bounds horizontal and vertical lines", () 
 
   assert.equal(placements.length, 16);
   assert.equal(placements.every((placement) => placement.cells.length === 3), true);
+});
+
+test("L-shape placements include only in-bounds three-cell turns", () => {
+  const board = createEmptyBoard(3, 3);
+  const placements = listLShapePlacements(board, 3);
+
+  assert.equal(placements.length, 32);
+  assert.equal(placements.every((placement) => placement.directionId === "l-shape"), true);
+  assert.equal(placements.every((placement) => placement.cells.length === 3), true);
+  assert.equal(listLShapePlacements(board, 4).length, 0);
 });
 
 test("level 1 board guarantees at least four readable answers", () => {
@@ -97,6 +108,23 @@ test("answer scanner finds known addition and subtraction lines", () => {
     answers.map((answer) => answer.expression),
     ["5 + 7 = 12", "9 - 4 = 5"]
   );
+});
+
+test("answer scanner includes L-shapes only for player-facing scans", () => {
+  const board = createEmptyBoard(3, 3);
+  board[0][0].value = 5;
+  board[0][1].value = 7;
+  board[1][1].value = 12;
+
+  const allAnswers = scanBoardForAnswers(board, getLevelConfig(5));
+  const guaranteedAnswers = scanBoardForAnswers(board, getLevelConfig(5), ["left-to-right", "top-to-bottom"]);
+
+  assert.equal(allAnswers.some((answer) => (
+    answer.directionId === "l-shape" &&
+    answer.expression === "5 + 7 = 12" &&
+    answer.cells.map((cell) => cell.id).join(",") === "0:0,0:1,1:1"
+  )), true);
+  assert.equal(guaranteedAnswers.some((answer) => answer.directionId === "l-shape"), false);
 });
 
 test("answer scanner filters equations outside the level target", () => {
@@ -176,6 +204,50 @@ test("refill cells prevents the cleared three cells from becoming the next answe
   });
 
   assert.equal(hasAnswerOnSameCells(refilled.board, level, clearedCells), false);
+});
+
+test("refill cells prevents cleared L-shape cells from becoming the next answer", () => {
+  const baseLevel = getLevelConfig(5);
+  const level = { ...baseLevel, guaranteedAnswerCount: 0 };
+  const board = createEmptyBoard(3, 3);
+
+  for (const row of board) {
+    for (const boardCell of row) {
+      boardCell.value = 20;
+    }
+  }
+
+  const clearedCells = [
+    board[0][0],
+    board[0][1],
+    board[1][1]
+  ];
+  const randomValues = [0.2, 0.3, 0.55];
+  const refilled = refillCells(board, clearedCells, level, {
+    random: () => randomValues.shift() ?? 0
+  });
+
+  assert.equal(hasAnswerOnSameCells(refilled.board, level, clearedCells), false);
+  assert.notDeepEqual(
+    [refilled.board[0][0].value, refilled.board[0][1].value, refilled.board[1][1].value],
+    [5, 7, 12]
+  );
+});
+
+test("refill cells restores readable guarantees after clearing an L-shape answer", () => {
+  const generated = generateBoard(1, { seed: 12 });
+  const clearedCells = [
+    generated.board[0][0],
+    generated.board[1][0],
+    generated.board[1][1]
+  ];
+  const refilled = refillCells(generated.board, clearedCells, generated.level, { seed: 13 });
+
+  assert.equal(hasAnswerOnSameCells(refilled.board, generated.level, clearedCells), false);
+  assert.equal(refilled.guaranteedAnswers.length >= generated.level.guaranteedAnswerCount, true);
+  assert.equal(refilled.guaranteedAnswers.every((answer) => (
+    answer.directionId === "left-to-right" || answer.directionId === "top-to-bottom"
+  )), true);
 });
 
 test("refill cells restores guarantees without reusing the cleared answer cells", () => {
