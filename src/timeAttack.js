@@ -17,17 +17,33 @@
     return clamp(multiplier, MIN_MULTIPLIER, MAX_MULTIPLIER);
   }
 
-  function createTimeAttackState(now = Date.now()) {
-    const startedAt = Number(now);
-
+  function createTimeAttackState() {
     return {
-      startedAt,
-      endsAt: startedAt + DURATION_MS,
+      startedAt: null,
+      endsAt: null,
       score: 0,
       cumulativeMultiplier: MIN_MULTIPLIER,
       lastCorrectAt: null,
       lastGain: 0,
       lastMultiplier: MIN_MULTIPLIER
+    };
+  }
+
+  function hasCountdownStarted(state) {
+    return typeof state.startedAt === "number" && typeof state.endsAt === "number";
+  }
+
+  function startCountdown(state, now = Date.now()) {
+    if (hasCountdownStarted(state)) {
+      return state;
+    }
+
+    const startedAt = Number(now);
+
+    return {
+      ...state,
+      startedAt,
+      endsAt: startedAt + DURATION_MS
     };
   }
 
@@ -63,11 +79,15 @@
   }
 
   function getRemainingMs(state, now = Date.now()) {
+    if (!hasCountdownStarted(state)) {
+      return DURATION_MS;
+    }
+
     return Math.max(0, state.endsAt - Number(now));
   }
 
   function isTimeUp(state, now = Date.now()) {
-    return getRemainingMs(state, now) <= 0;
+    return hasCountdownStarted(state) && getRemainingMs(state, now) <= 0;
   }
 
   function formatRemainingSeconds(remainingMs) {
@@ -85,6 +105,8 @@
     FULL_MULTIPLIER_MS,
     calculateChainMultiplier,
     createTimeAttackState,
+    hasCountdownStarted,
+    startCountdown,
     applyCorrectAnswer,
     getRemainingMs,
     isTimeUp,

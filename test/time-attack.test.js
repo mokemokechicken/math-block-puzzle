@@ -16,20 +16,37 @@ test("chain multiplier slopes linearly from 2x to 1x over one to ten seconds", (
   assert.equal(timeAttack.calculateChainMultiplier(12000), 1);
 });
 
-test("time attack state starts with one minute and zero score", () => {
-  const state = timeAttack.createTimeAttackState(1000);
+test("time attack state waits for the first cleared answer before countdown starts", () => {
+  const state = timeAttack.createTimeAttackState();
 
-  assert.equal(state.startedAt, 1000);
-  assert.equal(state.endsAt, 61000);
+  assert.equal(state.startedAt, null);
+  assert.equal(state.endsAt, null);
   assert.equal(state.score, 0);
   assert.equal(state.cumulativeMultiplier, 1);
   assert.equal(state.lastCorrectAt, null);
+  assert.equal(timeAttack.hasCountdownStarted(state), false);
+  assert.equal(timeAttack.getRemainingMs(state, 999999), 60000);
+  assert.equal(timeAttack.isTimeUp(state, 999999), false);
+});
+
+test("time attack countdown can start after the first answer is cleared", () => {
+  const initial = timeAttack.createTimeAttackState();
+  const scored = timeAttack.applyCorrectAnswer(initial, 1000);
+  const started = timeAttack.startCountdown(scored, 1500);
+
+  assert.equal(started.score, 10);
+  assert.equal(started.lastCorrectAt, 1000);
+  assert.equal(started.startedAt, 1500);
+  assert.equal(started.endsAt, 61500);
+  assert.equal(timeAttack.hasCountdownStarted(started), true);
 });
 
 test("first correct answer earns only the base score", () => {
-  const initial = timeAttack.createTimeAttackState(1000);
+  const initial = timeAttack.createTimeAttackState();
   const state = timeAttack.applyCorrectAnswer(initial, 1500);
 
+  assert.equal(state.startedAt, null);
+  assert.equal(state.endsAt, null);
   assert.equal(state.score, 10);
   assert.equal(state.lastGain, 10);
   assert.equal(state.cumulativeMultiplier, 1);
@@ -90,7 +107,7 @@ test("internal multiplier precision does not round across the score floor bounda
 });
 
 test("remaining time helpers clamp at zero and format seconds", () => {
-  const state = timeAttack.createTimeAttackState(1000);
+  const state = timeAttack.startCountdown(timeAttack.createTimeAttackState(), 1000);
 
   assert.equal(timeAttack.getRemainingMs(state, 1000), 60000);
   assert.equal(timeAttack.formatRemainingSeconds(60000), "60");

@@ -193,13 +193,12 @@ test("game panel progress bar reflects completed answers", () => {
 });
 
 test("time attack mode exposes timer, score, and multiplier status", () => {
-  const now = Date.now();
-  const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now });
+  const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack" });
   const markup = createGamePanelMarkup(state);
 
   assert.equal(state.mode, "time-attack");
-  assert.equal(state.timeAttack.startedAt, now);
-  assert.equal(state.timeAttack.endsAt, now + 60000);
+  assert.equal(state.timeAttack.startedAt, null);
+  assert.equal(state.timeAttack.endsAt, null);
   assert.match(markup, /1分でハイスコアを狙おう/);
   assert.match(markup, /data-time-remaining/);
   assert.match(markup, /data-time-score/);
@@ -207,6 +206,32 @@ test("time attack mode exposes timer, score, and multiplier status", () => {
   assert.match(markup, /data-time-gain/);
   assert.match(markup, /data-time-remaining>60</);
   assert.doesNotMatch(markup, /role="progressbar"/);
+});
+
+test("time attack timer waits until countdown starts", () => {
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalCallback = null;
+  const root = {
+    querySelector: () => null
+  };
+
+  globalThis.setInterval = (callback) => {
+    intervalCallback = callback;
+    return 1000;
+  };
+  globalThis.clearInterval = () => {};
+
+  try {
+    const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack" });
+    startTimeAttackTimer(root, state);
+
+    assert.equal(intervalCallback, null);
+  } finally {
+    clearTimeAttackTimer();
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
 });
 
 test("time attack clear panel shows final score on time up", () => {
@@ -297,9 +322,13 @@ test("time attack timer keeps counting while pending refill uses latest score st
   globalThis.clearInterval = () => {};
 
   try {
-    const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now: currentNow });
-    startTimeAttackTimer(root, state);
+    const initial = createGameState({ levelId: 1, seed: 1, mode: "time-attack" });
+    const state = {
+      ...initial,
+      timeAttack: globalThis.MathBlockPuzzleTimeAttack.startCountdown(initial.timeAttack, currentNow)
+    };
 
+    startTimeAttackTimer(root, state);
     assert.equal(textNodes.get("[data-time-score]").textContent, "0");
     assert.equal(textNodes.get("[data-time-remaining]").textContent, "60");
     assert.equal(typeof intervalCallback, "function");
@@ -355,7 +384,12 @@ test("stale time attack interval callback does not update after timer is cleared
   globalThis.clearInterval = () => {};
 
   try {
-    const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now: currentNow });
+    const initial = createGameState({ levelId: 1, seed: 1, mode: "time-attack" });
+    const state = {
+      ...initial,
+      timeAttack: globalThis.MathBlockPuzzleTimeAttack.startCountdown(initial.timeAttack, currentNow)
+    };
+
     startTimeAttackTimer(root, state);
     clearTimeAttackTimer();
 
@@ -665,6 +699,70 @@ test("scheduled board refill keeps progress and replaces board values", () => {
     clearScheduledBoardRefresh();
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("time attack countdown starts after the first cleared cells are refilled", () => {
+  const originalDateNow = Date.now;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const callbacks = [];
+  let intervalCallback = null;
+  const timeNodes = new Map([
+    ["[data-time-remaining]", { textContent: "" }],
+    ["[data-time-score]", { textContent: "" }],
+    ["[data-time-multiplier]", { textContent: "" }],
+    ["[data-time-gain]", { textContent: "" }],
+    ["[data-time-fill]", { style: { setProperty() {} } }]
+  ]);
+  const initial = createGameState({ levelId: 1, seed: 15, mode: "time-attack" });
+  const scoredState = {
+    ...initial,
+    correctCount: 1,
+    timeAttack: globalThis.MathBlockPuzzleTimeAttack.applyCorrectAnswer(initial.timeAttack, 4000)
+  };
+  const selectedCells = [
+    initial.board[0][0],
+    initial.board[0][1],
+    initial.board[0][2]
+  ];
+  const root = {
+    innerHTML: "",
+    querySelectorAll: () => [],
+    querySelector: (selector) => timeNodes.get(selector) ?? null
+  };
+
+  Date.now = () => 5000;
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+  globalThis.clearTimeout = () => {};
+  globalThis.setInterval = (callback) => {
+    intervalCallback = callback;
+    return 3001;
+  };
+  globalThis.clearInterval = () => {};
+
+  try {
+    scheduleBoardRefill(root, scoredState, selectedCells, 100);
+    callbacks[0]();
+
+    assert.match(root.innerHTML, /data-time-score>10</);
+    assert.match(root.innerHTML, /data-time-remaining>60</);
+    assert.equal(typeof intervalCallback, "function");
+    assert.equal(timeNodes.get("[data-time-score]").textContent, "10");
+    assert.equal(timeNodes.get("[data-time-remaining]").textContent, "60");
+  } finally {
+    clearScheduledBoardRefresh();
+    clearTimeAttackTimer();
+    Date.now = originalDateNow;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
   }
 });
 

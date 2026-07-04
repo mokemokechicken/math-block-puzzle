@@ -14,8 +14,8 @@
   - `normal`: 従来の5問クリアモード。
   - `timeAttack`: 60秒スコアアタックモード。
 - `timeAttack`
-  - `startedAt`: 開始時刻。
-  - `endsAt`: 終了時刻。
+  - `startedAt`: countdown 開始時刻。開始前は `null`。
+  - `endsAt`: countdown 終了時刻。開始前は `null`。
   - `score`: 現在スコア。
   - `cumulativeMultiplier`: 累積倍率。
   - `lastCorrectAt`: 前回正解時刻。
@@ -27,25 +27,29 @@
 `src/timeAttack.js` に次を置く。
 
 - `calculateChainMultiplier(elapsedMs)`
-- `createTimeAttackState(now)`
+- `createTimeAttackState()`
+- `hasCountdownStarted(state)`
+- `startCountdown(state, now)`
 - `applyCorrectAnswer(state, now)`
 - `getRemainingMs(state, now)`
 - `isTimeUp(state, now)`
 
-`applyCorrectAnswer()` は、前回正解がない場合は基本点だけを加算する。前回正解から10秒以内なら `calculateChainMultiplier()` の上乗せ分を累積し、10秒超なら累積倍率をリセットして基本点だけにする。
+`createTimeAttackState()` は未開始状態を返す。`applyCorrectAnswer()` は、前回正解がない場合は基本点だけを加算し、countdown は開始しない。最初の正解ブロックが補充された時点で `startCountdown()` を呼び、そこから60秒を開始する。前回正解から10秒以内なら `calculateChainMultiplier()` の上乗せ分を累積し、10秒超なら累積倍率をリセットして基本点だけにする。
 
 ## UI
 
 - `game-controls` にモード切替ボタンを追加する。
 - 通常モードでは従来の Progress バーを表示する。
-- タイムアタックでは、残り時間、スコア、累積倍率、直近獲得点を表示する。
+- タイムアタックでは、残り時間、スコア、累積倍率、直近獲得点を表示する。開始前の残り時間は 60 秒として表示する。
 - タイムアタック中は5問ではクリアせず、残り時間0でタイムアップにする。
 - タイムアップ時は最終スコアを表示し、「もう一回」と「次のレベル」を使えるようにする。
 
 ## タイマー
 
-`main.js` に timer を持ち、タイムアタック描画時だけ起動する。
+`main.js` に timer を持ち、タイムアタックの countdown 開始後だけ起動する。
 
+- モード選択直後は timer を起動しない。
+- 最初の正解ブロックを補充した後、`startCountdown()` 済みの状態を描画して timer を起動する。
 - DOM 上の残り時間表示を短周期で更新する。
 - 残り時間が0になったら入力 controller と補充 timer を止め、タイムアップ状態を描画する。
 - 通常モードへの切替、レベル切替、リトライ、次のレベル、再描画時には timer を破棄する。

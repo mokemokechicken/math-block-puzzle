@@ -99,7 +99,6 @@
     const { board, config, timeAttack } = getDependencies();
     const level = config.getLevelConfig(options.levelId ?? DEFAULT_LEVEL_ID);
     const mode = normalizeGameMode(options.mode);
-    const now = options.now ?? getNow();
     const generated = options.board ? {
       board: options.board,
       guaranteedAnswers: board.scanBoardForAnswers(options.board, level, level.guaranteedDirections, {
@@ -116,7 +115,7 @@
       allAnswers: generated.allAnswers,
       correctCount: options.correctCount ?? 0,
       timeAttack: mode === GAME_MODES.timeAttack
-        ? (options.timeAttack ?? timeAttack.createTimeAttackState(now))
+        ? (options.timeAttack ?? timeAttack.createTimeAttackState())
         : null,
       completed: Boolean(options.completed),
       completionReason: options.completionReason ?? null
@@ -717,6 +716,12 @@
       return;
     }
 
+    const { timeAttack } = getDependencies();
+
+    if (!timeAttack.hasCountdownStarted(state.timeAttack)) {
+      return;
+    }
+
     const token = clearTimeAttackTimer();
     syncTimeAttackTimerState(state);
 
@@ -796,12 +801,19 @@
       const refilled = board.refillCells(state.board, cellsToRefill, state.level, {
         seed: nextBoardSeed()
       });
-      const nextState = {
+      let nextState = {
         ...state,
         board: refilled.board,
         guaranteedAnswers: refilled.guaranteedAnswers,
         allAnswers: refilled.allAnswers
       };
+
+      if (isTimeAttackMode(nextState) && !timeAttack.hasCountdownStarted(nextState.timeAttack)) {
+        nextState = {
+          ...nextState,
+          timeAttack: timeAttack.startCountdown(nextState.timeAttack, getNow())
+        };
+      }
 
       if (nextState.allAnswers.length === 0) {
         if (isTimeAttackMode(nextState)) {
