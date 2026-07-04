@@ -379,7 +379,7 @@
           ${createModeSelectorMarkup(state)}
           ${createAudioToggleMarkup()}
         </div>
-        <div class="game-toolbar" aria-label="ゲーム状態">
+        <div class="game-toolbar" aria-label="ゲーム状態" data-score-burst-anchor>
           <div>
             <p class="status-label">${state.level.name}</p>
             <p class="status-text" data-status-text>${isTimeAttackMode(state) ? "1分でハイスコアを狙おう" : "縦・横・L字に 3 個なぞってください"}</p>
@@ -667,7 +667,27 @@
     return Math.min(SCORE_BURST_MAX_SCALE, 1 + (bonus / 32));
   }
 
-  function showTimeAttackScoreBurst(timeAttackState) {
+  function getScoreBurstPoint(root) {
+    const anchor = root?.querySelector?.("[data-score-burst-anchor]");
+    const rect = anchor?.getBoundingClientRect?.();
+
+    if (
+      !rect ||
+      !Number.isFinite(rect.left) ||
+      !Number.isFinite(rect.top) ||
+      !Number.isFinite(rect.width) ||
+      !Number.isFinite(rect.height)
+    ) {
+      return null;
+    }
+
+    return {
+      x: rect.left + (rect.width / 2),
+      y: rect.top + (rect.height / 2)
+    };
+  }
+
+  function showTimeAttackScoreBurst(timeAttackState, root = null) {
     if (!global.document?.body || !timeAttackState?.lastGain) {
       return null;
     }
@@ -683,6 +703,14 @@
     scoreBurst.textContent = `+${timeAttackState.lastGain}点`;
     scoreBurst.setAttribute?.("aria-hidden", "true");
     scoreBurst.style.setProperty?.("--score-burst-scale", String(scale));
+
+    const point = getScoreBurstPoint(root);
+
+    if (point) {
+      scoreBurst.style.setProperty?.("--score-burst-left", `${point.x}px`);
+      scoreBurst.style.setProperty?.("--score-burst-top", `${point.y}px`);
+    }
+
     global.document.body.append(scoreBurst);
 
     global.setTimeout?.(() => {
@@ -1069,7 +1097,7 @@
           syncTimeAttackTimerState(nextState);
           setText(statusText, `正解: ${result.expression}${scoreSuffix}`);
           updateTimeAttackDisplay(root, nextState);
-          showTimeAttackScoreBurst(nextTimeAttack);
+          showTimeAttackScoreBurst(nextTimeAttack, root);
           playSound(
             isTimeAttackCombo(nextTimeAttack)
               ? global.MathBlockPuzzleAudio?.SOUND_TYPES.comboCorrect
@@ -1284,6 +1312,7 @@
     getSuccessAnimationDurations,
     isTimeAttackCombo,
     getScoreBurstScale,
+    getScoreBurstPoint,
     showTimeAttackScoreBurst,
     playSuccessAnimation,
     markClearingCells,

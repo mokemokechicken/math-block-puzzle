@@ -22,6 +22,7 @@ const {
   getSuccessAnimationDurations,
   isTimeAttackCombo,
   getScoreBurstScale,
+  getScoreBurstPoint,
   showTimeAttackScoreBurst,
   playSuccessAnimation,
   nextBoardSeed,
@@ -664,7 +665,19 @@ test("time attack score burst scales with gained points and marks combo", () => 
   };
 
   try {
-    const burst = showTimeAttackScoreBurst({ lastGain: 25, lastMultiplier: 1.5 });
+    const root = {
+      querySelector: (selector) => selector === "[data-score-burst-anchor]"
+        ? {
+            getBoundingClientRect: () => ({
+              left: 40,
+              top: 90,
+              width: 320,
+              height: 88
+            })
+          }
+        : null
+    };
+    const burst = showTimeAttackScoreBurst({ lastGain: 25, lastMultiplier: 1.5 }, root);
 
     assert.equal(burst, scoreBurst);
     assert.equal(appended[0], scoreBurst);
@@ -673,6 +686,9 @@ test("time attack score burst scales with gained points and marks combo", () => 
     assert.equal(scoreBurst.textContent, "+25点");
     assert.equal(scoreBurst.attributes["aria-hidden"], "true");
     assert.equal(Number(scoreBurst.style.values.get("--score-burst-scale")) > getScoreBurstScale(10), true);
+    assert.deepEqual(getScoreBurstPoint(root), { x: 200, y: 134 });
+    assert.equal(scoreBurst.style.values.get("--score-burst-left"), "200px");
+    assert.equal(scoreBurst.style.values.get("--score-burst-top"), "134px");
     assert.equal(isTimeAttackCombo({ lastMultiplier: 1.5 }), true);
     assert.equal(isTimeAttackCombo({ lastMultiplier: 1 }), false);
 
