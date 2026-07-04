@@ -292,11 +292,14 @@ h1 {
 }
 
 .time-attack-fill {
-  width: var(--time-percent, 100%);
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #dc2626, #f59e0b);
-  transition: width 180ms linear;
+  transform: scaleX(var(--time-scale, 1));
+  transform-origin: left center;
+  transition: transform 160ms linear;
+  will-change: transform;
 }
 
 .clear-panel {

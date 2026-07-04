@@ -7,8 +7,10 @@
   let boardRefreshToken = 0;
   let timeAttackTimer = null;
   let timeAttackTimerState = null;
+  let timeAttackTimerRoot = null;
   let timeAttackTimerToken = 0;
   let audioUnlockHandlersInstalled = false;
+  let timeAttackVisibilityHandlerInstalled = false;
   const DEFAULT_LEVEL_ID = 1;
   const DEFAULT_EXPRESSION_PREVIEW = "ブロックをなぞって式を作ろう";
   const GAME_MODES = Object.freeze({
@@ -265,7 +267,7 @@
   function createTimeAttackStatsMarkup(state) {
     const { timeAttack } = getDependencies();
     const remainingMs = timeAttack.getRemainingMs(state.timeAttack, getNow());
-    const remainingPercent = Math.round((remainingMs / timeAttack.DURATION_MS) * 10000) / 100;
+    const remainingScale = Math.max(0, Math.min(1, remainingMs / timeAttack.DURATION_MS));
     const lastGainText = state.timeAttack.lastGain > 0 ? `+${state.timeAttack.lastGain}` : "-";
 
     return `
@@ -287,7 +289,7 @@
           <span class="time-attack-stat__value" data-time-gain>${lastGainText}</span>
         </div>
         <div class="time-attack-track" aria-hidden="true">
-          <div class="time-attack-fill" data-time-fill style="--time-percent: ${remainingPercent}%"></div>
+          <div class="time-attack-fill" data-time-fill style="--time-scale: ${remainingScale}"></div>
         </div>
       </div>
     `;
@@ -377,9 +379,24 @@
   }
 
   function setText(element, text) {
-    if (element) {
+    if (element && element.textContent !== text) {
       element.textContent = text;
     }
+  }
+
+  function setStyleProperty(element, name, value) {
+    if (!element?.style) {
+      return false;
+    }
+
+    const currentValue = element.style.getPropertyValue?.(name);
+
+    if (currentValue === value) {
+      return false;
+    }
+
+    element.style.setProperty?.(name, value);
+    return true;
   }
 
   function clearHintCellClasses(boardRoot) {
@@ -657,16 +674,26 @@
     return boardRefreshToken;
   }
 
-  function clearTimeAttackTimer() {
+  function stopTimeAttackTimer(options = {}) {
+    const resetState = options.resetState ?? true;
+
     timeAttackTimerToken += 1;
 
     if (timeAttackTimer !== null) {
-      global.clearInterval?.(timeAttackTimer);
+      global.clearTimeout?.(timeAttackTimer);
       timeAttackTimer = null;
     }
 
-    timeAttackTimerState = null;
+    if (resetState) {
+      timeAttackTimerState = null;
+      timeAttackTimerRoot = null;
+    }
+
     return timeAttackTimerToken;
+  }
+
+  function clearTimeAttackTimer() {
+    return stopTimeAttackTimer({ resetState: true });
   }
 
   function syncTimeAttackTimerState(state) {
@@ -678,6 +705,16 @@
     return false;
   }
 
+  function getTimeAttackTickDelay(remainingMs) {
+    if (remainingMs <= 0) {
+      return 0;
+    }
+
+    const remainder = remainingMs % 1000;
+
+    return Math.max(1, remainder === 0 ? 1000 : remainder);
+  }
+
   function updateTimeAttackDisplay(root, state) {
     if (!isTimeAttackMode(state) || !state.timeAttack) {
       return 0;
@@ -685,7 +722,7 @@
 
     const { timeAttack } = getDependencies();
     const remainingMs = timeAttack.getRemainingMs(state.timeAttack, getNow());
-    const remainingPercent = Math.round((remainingMs / timeAttack.DURATION_MS) * 10000) / 100;
+    const remainingScale = Math.max(0, Math.min(1, remainingMs / timeAttack.DURATION_MS));
     const remainingElement = root.querySelector("[data-time-remaining]");
     const scoreElement = root.querySelector("[data-time-score]");
     const multiplierElement = root.querySelector("[data-time-multiplier]");
@@ -696,10 +733,7 @@
     setText(scoreElement, String(state.timeAttack.score));
     setText(multiplierElement, timeAttack.formatMultiplier(state.timeAttack.cumulativeMultiplier));
     setText(gainElement, state.timeAttack.lastGain > 0 ? `+${state.timeAttack.lastGain}` : "-");
-
-    if (fillElement?.style) {
-      fillElement.style.setProperty("--time-percent", `${remainingPercent}%`);
-    }
+    setStyleProperty(fillElement, "--time-scale", String(remainingScale));
 
     return remainingMs;
   }
@@ -722,11 +756,17 @@
       return;
     }
 
-    const token = clearTimeAttackTimer();
+    const token = stopTimeAttackTimer({ resetState: false });
+    timeAttackTimerRoot = root;
     syncTimeAttackTimerState(state);
 
     const tick = () => {
       if (token !== timeAttackTimerToken || !timeAttackTimerState) {
+        return;
+      }
+
+      if (global.document?.hidden) {
+        stopTimeAttackTimer({ resetState: false });
         return;
       }
 
@@ -735,14 +775,41 @@
 
       if (remainingMs <= 0) {
         completeTimeAttack(root, currentState);
+        return;
+      }
+
+      if (token === timeAttackTimerToken) {
+        timeAttackTimer = global.setTimeout?.(tick, getTimeAttackTickDelay(remainingMs)) ?? null;
       }
     };
 
     tick();
+  }
 
-    if (token === timeAttackTimerToken) {
-      timeAttackTimer = global.setInterval?.(tick, 250) ?? null;
+  function installTimeAttackVisibilityHandler(target = global.document) {
+    if (
+      timeAttackVisibilityHandlerInstalled ||
+      !target ||
+      typeof target.addEventListener !== "function"
+    ) {
+      return false;
     }
+
+    target.addEventListener("visibilitychange", () => {
+      if (!timeAttackTimerState || !timeAttackTimerRoot) {
+        return;
+      }
+
+      if (target.hidden) {
+        stopTimeAttackTimer({ resetState: false });
+        return;
+      }
+
+      startTimeAttackTimer(timeAttackTimerRoot, timeAttackTimerState);
+    });
+
+    timeAttackVisibilityHandlerInstalled = true;
+    return true;
   }
 
   function scheduleBoardRefresh(root, levelId, delay = 900) {
@@ -1105,6 +1172,8 @@
     createInitialMarkup,
     createCellMap,
     markSelectedCells,
+    setText,
+    setStyleProperty,
     unlockAudioFromUserGesture,
     installAudioUnlockHandlers,
     clearHintCellClasses,
@@ -1119,10 +1188,13 @@
     markClearingCells,
     clearScheduledBoardRefresh,
     clearTimeAttackTimer,
+    stopTimeAttackTimer,
     syncTimeAttackTimerState,
+    getTimeAttackTickDelay,
     updateTimeAttackDisplay,
     completeTimeAttack,
     startTimeAttackTimer,
+    installTimeAttackVisibilityHandler,
     scheduleBoardRefresh,
     scheduleBoardRefill,
     completeState,
@@ -1135,6 +1207,7 @@
 
   if (global.document) {
     installAudioUnlockHandlers(global.document);
+    installTimeAttackVisibilityHandler(global.document);
     renderInitialScreen(global.document.querySelector("#game-root"));
   }
 })(globalThis);
