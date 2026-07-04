@@ -6,6 +6,8 @@ import "../src/rules.js";
 import "../src/board.js";
 import "../src/input.js";
 import "../src/hints.js";
+import "../src/audio.js";
+import "../src/timeAttack.js";
 import "../src/main.js";
 
 const { renderInitialScreen } = globalThis.MathBlockPuzzleApp;
@@ -17,6 +19,7 @@ test("index.html loads the initial app assets", () => {
   assert.match(html, /\.\/src\/styles\.css/);
   assert.match(html, /\.\/src\/hints\.js/);
   assert.match(html, /\.\/src\/audio\.js/);
+  assert.match(html, /\.\/src\/timeAttack\.js/);
   assert.match(html, /\.\/src\/main\.js/);
   assert.match(html, /viewport-fit=cover/);
   assert.doesNotMatch(html, /type="module"/);
@@ -26,6 +29,7 @@ test("main script renders the initial placeholder copy", () => {
   const source = readFileSync("src/main.js", "utf8");
 
   assert.match(source, /縦・横・L字に 3 個/);
+  assert.match(source, /1分でハイスコアを狙おう/);
   assert.match(source, /data-game-board/);
 });
 
@@ -48,7 +52,7 @@ test("mobile layout lets the progress meter use the full toolbar width", () => {
   const css = readFileSync("src/styles.css", "utf8");
 
   assert.match(css, /\.progress-meter\s*{[^}]*min-width: 170px;/s);
-  assert.match(css, /@media \(max-width: 520px\)\s*{[\s\S]*\.game-counters,\s*\.progress-meter\s*{[^}]*width: 100%;/s);
+  assert.match(css, /@media \(max-width: 520px\)\s*{[\s\S]*\.game-counters,\s*\.progress-meter,\s*\.time-attack-stats\s*{[^}]*width: 100%;/s);
 });
 
 test("initial renderer mounts visible app markup into #game-root", () => {

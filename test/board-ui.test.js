@@ -6,12 +6,14 @@ import "../src/board.js";
 import "../src/input.js";
 import "../src/hints.js";
 import "../src/audio.js";
+import "../src/timeAttack.js";
 import "../src/main.js";
 
 const {
   createGameState,
   createBoardMarkup,
   createGamePanelMarkup,
+  createClearMarkup,
   formatSelectionPreview,
   getFloatingEquationPoint,
   getFloatingEquationViewportPoint,
@@ -20,12 +22,17 @@ const {
   playSuccessAnimation,
   nextBoardSeed,
   clearScheduledBoardRefresh,
+  clearTimeAttackTimer,
+  syncTimeAttackTimerState,
+  updateTimeAttackDisplay,
+  startTimeAttackTimer,
   scheduleBoardRefresh,
   scheduleBoardRefill,
   scrollBoardIntoView,
   installAudioUnlockHandlers,
   applyHintStage,
-  createHintController
+  createHintController,
+  setupBoardInput
 } = globalThis.MathBlockPuzzleApp;
 const { getLevelConfig } = globalThis.MathBlockPuzzleConfig;
 
@@ -167,6 +174,10 @@ test("game panel exposes level selection, progress, and audio control", () => {
   assert.match(markup, /aria-valuenow="0"/);
   assert.match(markup, /aria-valuemax="5"/);
   assert.match(markup, /--progress-percent: 0%/);
+  assert.match(markup, /data-game-mode="normal"/);
+  assert.match(markup, /data-game-mode="time-attack"/);
+  assert.match(markup, />通常</);
+  assert.match(markup, />1分アタック</);
   assert.match(markup, /data-audio-toggle/);
   assert.doesNotMatch(markup, /こ見つかる/);
   assert.doesNotMatch(markup, /盤面の正解候補数/);
@@ -179,6 +190,272 @@ test("game panel progress bar reflects completed answers", () => {
   assert.match(markup, /3 \/ 5/);
   assert.match(markup, /aria-valuenow="3"/);
   assert.match(markup, /--progress-percent: 60%/);
+});
+
+test("time attack mode exposes timer, score, and multiplier status", () => {
+  const now = Date.now();
+  const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now });
+  const markup = createGamePanelMarkup(state);
+
+  assert.equal(state.mode, "time-attack");
+  assert.equal(state.timeAttack.startedAt, now);
+  assert.equal(state.timeAttack.endsAt, now + 60000);
+  assert.match(markup, /1分でハイスコアを狙おう/);
+  assert.match(markup, /data-time-remaining/);
+  assert.match(markup, /data-time-score/);
+  assert.match(markup, /data-time-multiplier/);
+  assert.match(markup, /data-time-gain/);
+  assert.match(markup, /data-time-remaining>60</);
+  assert.doesNotMatch(markup, /role="progressbar"/);
+});
+
+test("time attack clear panel shows final score on time up", () => {
+  const state = createGameState({ levelId: 2, seed: 2, mode: "time-attack", now: 1000 });
+  const markup = createClearMarkup({
+    ...state,
+    completed: true,
+    completionReason: "time-up",
+    timeAttack: {
+      ...state.timeAttack,
+      score: 42
+    }
+  });
+
+  assert.match(markup, /タイムアップ/);
+  assert.match(markup, /最終スコア 42点/);
+  assert.match(markup, /data-next-level="3"/);
+});
+
+test("time attack display updater reflects latest score state", () => {
+  const now = Date.now();
+  const textNodes = new Map([
+    ["[data-time-remaining]", { textContent: "" }],
+    ["[data-time-score]", { textContent: "" }],
+    ["[data-time-multiplier]", { textContent: "" }],
+    ["[data-time-gain]", { textContent: "" }]
+  ]);
+  const fill = {
+    style: {
+      values: new Map(),
+      setProperty(name, value) {
+        this.values.set(name, value);
+      }
+    }
+  };
+  const root = {
+    querySelector: (selector) => selector === "[data-time-fill]" ? fill : textNodes.get(selector)
+  };
+  const state = createGameState({
+    levelId: 1,
+    seed: 1,
+    mode: "time-attack",
+    timeAttack: {
+      startedAt: now - 1000,
+      endsAt: now + 5000,
+      score: 28,
+      cumulativeMultiplier: 1.889,
+      lastCorrectAt: now - 2000,
+      lastGain: 18,
+      lastMultiplier: 1.889
+    }
+  });
+
+  assert.equal(updateTimeAttackDisplay(root, state) > 0, true);
+  assert.equal(textNodes.get("[data-time-remaining]").textContent, "5");
+  assert.equal(textNodes.get("[data-time-score]").textContent, "28");
+  assert.equal(textNodes.get("[data-time-multiplier]").textContent, "1.9x");
+  assert.equal(textNodes.get("[data-time-gain]").textContent, "+18");
+  assert.equal(fill.style.values.get("--time-percent")?.endsWith("%"), true);
+});
+
+test("time attack timer keeps counting while pending refill uses latest score state", () => {
+  const originalDateNow = Date.now;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let currentNow = 100000;
+  let intervalCallback = null;
+  const textNodes = new Map([
+    ["[data-time-remaining]", { textContent: "" }],
+    ["[data-time-score]", { textContent: "" }],
+    ["[data-time-multiplier]", { textContent: "" }],
+    ["[data-time-gain]", { textContent: "" }]
+  ]);
+  const fill = {
+    style: {
+      setProperty() {}
+    }
+  };
+  const root = {
+    querySelector: (selector) => selector === "[data-time-fill]" ? fill : textNodes.get(selector)
+  };
+
+  Date.now = () => currentNow;
+  globalThis.setInterval = (callback) => {
+    intervalCallback = callback;
+    return 1001;
+  };
+  globalThis.clearInterval = () => {};
+
+  try {
+    const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now: currentNow });
+    startTimeAttackTimer(root, state);
+
+    assert.equal(textNodes.get("[data-time-score]").textContent, "0");
+    assert.equal(textNodes.get("[data-time-remaining]").textContent, "60");
+    assert.equal(typeof intervalCallback, "function");
+
+    const nextState = {
+      ...state,
+      timeAttack: globalThis.MathBlockPuzzleTimeAttack.applyCorrectAnswer(state.timeAttack, currentNow + 100)
+    };
+
+    syncTimeAttackTimerState(nextState);
+    updateTimeAttackDisplay(root, nextState);
+
+    currentNow += 1500;
+    intervalCallback();
+
+    assert.equal(textNodes.get("[data-time-score]").textContent, "10");
+    assert.equal(textNodes.get("[data-time-gain]").textContent, "+10");
+    assert.equal(textNodes.get("[data-time-remaining]").textContent, "59");
+  } finally {
+    clearTimeAttackTimer();
+    Date.now = originalDateNow;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test("stale time attack interval callback does not update after timer is cleared", () => {
+  const originalDateNow = Date.now;
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let currentNow = 200000;
+  let intervalCallback = null;
+  const textNodes = new Map([
+    ["[data-time-remaining]", { textContent: "keep" }],
+    ["[data-time-score]", { textContent: "keep" }],
+    ["[data-time-multiplier]", { textContent: "keep" }],
+    ["[data-time-gain]", { textContent: "keep" }]
+  ]);
+  const fill = {
+    style: {
+      setProperty() {}
+    }
+  };
+  const root = {
+    querySelector: (selector) => selector === "[data-time-fill]" ? fill : textNodes.get(selector)
+  };
+
+  Date.now = () => currentNow;
+  globalThis.setInterval = (callback) => {
+    intervalCallback = callback;
+    return 1002;
+  };
+  globalThis.clearInterval = () => {};
+
+  try {
+    const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now: currentNow });
+    startTimeAttackTimer(root, state);
+    clearTimeAttackTimer();
+
+    textNodes.get("[data-time-remaining]").textContent = "keep";
+    textNodes.get("[data-time-score]").textContent = "keep";
+    currentNow += 61000;
+    intervalCallback();
+
+    assert.equal(textNodes.get("[data-time-remaining]").textContent, "keep");
+    assert.equal(textNodes.get("[data-time-score]").textContent, "keep");
+  } finally {
+    clearTimeAttackTimer();
+    Date.now = originalDateNow;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test("time attack selection completion uses one timestamp for timeout and scoring", () => {
+  const originalDateNow = Date.now;
+  const originalInput = globalThis.MathBlockPuzzleInput;
+  const originalRules = globalThis.MathBlockPuzzleRules;
+  const originalTimeAttack = globalThis.MathBlockPuzzleTimeAttack;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const state = createGameState({ levelId: 1, seed: 1, mode: "time-attack", now: 0 });
+  const selection = [
+    { id: "0:0", row: 0, col: 0, value: 1, element: cellElement("0:0") },
+    { id: "0:1", row: 0, col: 1, value: 1, element: cellElement("0:1") },
+    { id: "0:2", row: 0, col: 2, value: 2, element: cellElement("0:2") }
+  ];
+  const boardRoot = {
+    classList: {
+      add() {}
+    },
+    querySelectorAll: () => []
+  };
+  const root = {
+    querySelector: (selector) => ({
+      "[data-game-board]": boardRoot,
+      "[data-status-text]": { textContent: "" },
+      "[data-expression-preview]": { textContent: "" },
+      "[data-time-remaining]": { textContent: "" },
+      "[data-time-score]": { textContent: "" },
+      "[data-time-multiplier]": { textContent: "" },
+      "[data-time-gain]": { textContent: "" },
+      "[data-time-fill]": { style: { setProperty() {} } }
+    })[selector] ?? null
+  };
+  let isTimeUpNow = null;
+  let applyNow = null;
+  let dateCallCount = 0;
+
+  Date.now = () => {
+    dateCallCount += 1;
+    return dateCallCount === 1 ? 59999 : 60001;
+  };
+  globalThis.setTimeout = () => 2001;
+  globalThis.clearTimeout = () => {};
+  globalThis.MathBlockPuzzleInput = {
+    createElementCellResolver: () => null,
+    createPointerDragController: (options) => {
+      options.onSelectionComplete(selection);
+      return { destroy() {} };
+    }
+  };
+  globalThis.MathBlockPuzzleRules = {
+    ...originalRules,
+    validateSelection: () => ({
+      valid: true,
+      expression: "1 + 1 = 2"
+    })
+  };
+  globalThis.MathBlockPuzzleTimeAttack = {
+    ...originalTimeAttack,
+    isTimeUp: (timeAttackState, now) => {
+      isTimeUpNow = now;
+      return originalTimeAttack.isTimeUp(timeAttackState, now);
+    },
+    applyCorrectAnswer: (timeAttackState, now) => {
+      applyNow = now;
+      return originalTimeAttack.applyCorrectAnswer(timeAttackState, now);
+    }
+  };
+
+  try {
+    setupBoardInput(root, state);
+
+    assert.equal(isTimeUpNow, 59999);
+    assert.equal(applyNow, 59999);
+  } finally {
+    clearScheduledBoardRefresh();
+    clearTimeAttackTimer();
+    Date.now = originalDateNow;
+    globalThis.MathBlockPuzzleInput = originalInput;
+    globalThis.MathBlockPuzzleRules = originalRules;
+    globalThis.MathBlockPuzzleTimeAttack = originalTimeAttack;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });
 
 test("global audio unlock handlers prepare sound on the first page gesture", () => {
