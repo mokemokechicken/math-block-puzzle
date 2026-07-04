@@ -16,6 +16,8 @@
   const ANSWER_HEAT_DECAY = 0.75;
   const ANSWER_HEAT_INCREMENT = 1;
   const ANSWER_HEAT_MINIMUM = 0.05;
+  const SCORE_BURST_BASE_GAIN = 10;
+  const SCORE_BURST_MAX_SCALE = 1.85;
   const GAME_MODES = Object.freeze({
     normal: "normal",
     timeAttack: "time-attack"
@@ -642,14 +644,52 @@
     if (prefersReducedMotion()) {
       return {
         highlight: 180,
-        floating: 240
+        floating: 240,
+        scoreBurst: 320
       };
     }
 
     return {
       highlight: 520,
-      floating: 1200
+      floating: 1200,
+      scoreBurst: 960
     };
+  }
+
+  function isTimeAttackCombo(timeAttackState) {
+    return Number(timeAttackState?.lastMultiplier) > 1;
+  }
+
+  function getScoreBurstScale(gain) {
+    const numericGain = Math.max(SCORE_BURST_BASE_GAIN, Number(gain) || SCORE_BURST_BASE_GAIN);
+    const bonus = Math.max(0, numericGain - SCORE_BURST_BASE_GAIN);
+
+    return Math.min(SCORE_BURST_MAX_SCALE, 1 + (bonus / 32));
+  }
+
+  function showTimeAttackScoreBurst(timeAttackState) {
+    if (!global.document?.body || !timeAttackState?.lastGain) {
+      return null;
+    }
+
+    const durations = getSuccessAnimationDurations();
+    const scoreBurst = global.document.createElement("div");
+    const scale = getScoreBurstScale(timeAttackState.lastGain);
+    const className = isTimeAttackCombo(timeAttackState)
+      ? "score-burst is-combo"
+      : "score-burst";
+
+    scoreBurst.className = className;
+    scoreBurst.textContent = `+${timeAttackState.lastGain}点`;
+    scoreBurst.setAttribute?.("aria-hidden", "true");
+    scoreBurst.style.setProperty?.("--score-burst-scale", String(scale));
+    global.document.body.append(scoreBurst);
+
+    global.setTimeout?.(() => {
+      scoreBurst.remove();
+    }, durations.scoreBurst);
+
+    return scoreBurst;
   }
 
   function playSuccessAnimation(boardRoot, selectedCells, expression) {
@@ -1029,7 +1069,12 @@
           syncTimeAttackTimerState(nextState);
           setText(statusText, `正解: ${result.expression}${scoreSuffix}`);
           updateTimeAttackDisplay(root, nextState);
-          playSound(global.MathBlockPuzzleAudio?.SOUND_TYPES.correct);
+          showTimeAttackScoreBurst(nextTimeAttack);
+          playSound(
+            isTimeAttackCombo(nextTimeAttack)
+              ? global.MathBlockPuzzleAudio?.SOUND_TYPES.comboCorrect
+              : global.MathBlockPuzzleAudio?.SOUND_TYPES.correct
+          );
           hintController.stop();
           playSuccessAnimation(boardRoot, selection, result.expression);
           markClearingCells(selection);
@@ -1237,6 +1282,9 @@
     prefersReducedMotion,
     getBoardRefillDelay,
     getSuccessAnimationDurations,
+    isTimeAttackCombo,
+    getScoreBurstScale,
+    showTimeAttackScoreBurst,
     playSuccessAnimation,
     markClearingCells,
     clearScheduledBoardRefresh,

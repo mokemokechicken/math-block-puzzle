@@ -20,6 +20,9 @@ const {
   getFloatingEquationViewportPoint,
   getBoardRefillDelay,
   getSuccessAnimationDurations,
+  isTimeAttackCombo,
+  getScoreBurstScale,
+  showTimeAttackScoreBurst,
   playSuccessAnimation,
   nextBoardSeed,
   clearScheduledBoardRefresh,
@@ -616,14 +619,69 @@ test("success animation durations follow reduced motion preference", () => {
   const originalMatchMedia = globalThis.matchMedia;
 
   globalThis.matchMedia = () => ({ matches: true });
-  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 180, floating: 240 });
+  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 180, floating: 240, scoreBurst: 320 });
   assert.equal(getBoardRefillDelay(), 60);
 
   globalThis.matchMedia = () => ({ matches: false });
-  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 520, floating: 1200 });
+  assert.deepEqual(getSuccessAnimationDurations(), { highlight: 520, floating: 1200, scoreBurst: 960 });
   assert.equal(getBoardRefillDelay(), 120);
 
   globalThis.matchMedia = originalMatchMedia;
+});
+
+test("time attack score burst scales with gained points and marks combo", () => {
+  const originalDocument = globalThis.document;
+  const originalSetTimeout = globalThis.setTimeout;
+  const appended = [];
+  const callbacks = [];
+  const scoreBurst = {
+    className: "",
+    textContent: "",
+    attributes: {},
+    style: {
+      values: new Map(),
+      setProperty(name, value) {
+        this.values.set(name, value);
+      }
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    remove() {
+      scoreBurst.removed = true;
+    }
+  };
+
+  globalThis.document = {
+    body: {
+      append: (element) => appended.push(element)
+    },
+    createElement: () => scoreBurst
+  };
+  globalThis.setTimeout = (callback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  };
+
+  try {
+    const burst = showTimeAttackScoreBurst({ lastGain: 25, lastMultiplier: 1.5 });
+
+    assert.equal(burst, scoreBurst);
+    assert.equal(appended[0], scoreBurst);
+    assert.match(scoreBurst.className, /score-burst/);
+    assert.match(scoreBurst.className, /is-combo/);
+    assert.equal(scoreBurst.textContent, "+25点");
+    assert.equal(scoreBurst.attributes["aria-hidden"], "true");
+    assert.equal(Number(scoreBurst.style.values.get("--score-burst-scale")) > getScoreBurstScale(10), true);
+    assert.equal(isTimeAttackCombo({ lastMultiplier: 1.5 }), true);
+    assert.equal(isTimeAttackCombo({ lastMultiplier: 1 }), false);
+
+    callbacks[0]();
+    assert.equal(scoreBurst.removed, true);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.setTimeout = originalSetTimeout;
+  }
 });
 
 test("success animation detaches floating equation so refill can rerender the board", () => {

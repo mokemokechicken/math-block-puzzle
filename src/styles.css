@@ -477,6 +477,32 @@ h1 {
   z-index: 100;
 }
 
+.score-burst {
+  position: fixed;
+  z-index: 130;
+  top: calc(26px + env(safe-area-inset-top));
+  left: 50%;
+  pointer-events: none;
+  color: #0f766e;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow:
+    0 2px 0 #ffffff,
+    0 12px 30px rgba(15, 118, 110, 0.35);
+  transform: translate(-50%, 0) scale(var(--score-burst-scale, 1));
+  animation: score-burst 960ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.score-burst.is-combo {
+  color: #dc2626;
+  text-shadow:
+    0 2px 0 #ffffff,
+    0 0 16px rgba(245, 158, 11, 0.75),
+    0 16px 34px rgba(220, 38, 38, 0.38);
+}
+
 @keyframes float-equation {
   0% {
     opacity: 0;
@@ -498,13 +524,35 @@ h1 {
   }
 }
 
+@keyframes score-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(calc(var(--score-burst-scale, 1) * 0.74));
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(var(--score-burst-scale, 1));
+  }
+
+  68% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -42px) scale(calc(var(--score-burst-scale, 1) * 1.08));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .number-block,
   .placeholder-block {
     transition-duration: 80ms;
   }
 
-  .floating-equation {
+  .floating-equation,
+  .score-burst {
     animation-duration: 240ms;
     transition-duration: 80ms;
   }

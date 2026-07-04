@@ -1,6 +1,7 @@
 (function defineGameAudio(global) {
   const SOUND_TYPES = Object.freeze({
     correct: "correct",
+    comboCorrect: "combo-correct",
     incorrect: "incorrect",
     clear: "clear",
     hint: "hint"
@@ -88,6 +89,14 @@
       if (soundType === SOUND_TYPES.correct) {
         playTone(context, 523.25, now, 0.08);
         playTone(context, 659.25, now + 0.07, 0.1);
+        return true;
+      }
+
+      if (soundType === SOUND_TYPES.comboCorrect) {
+        playTone(context, 659.25, now, 0.07, 0.09);
+        playTone(context, 783.99, now + 0.055, 0.08, 0.1);
+        playTone(context, 987.77, now + 0.12, 0.09, 0.11);
+        playTone(context, 1318.51, now + 0.2, 0.12, 0.09);
         return true;
       }
 

@@ -112,6 +112,10 @@ test("sound controller plays generated tones and supports mute", () => {
     assert.equal(FakeAudioContext.instances.length, 1);
     assert.equal(FakeAudioContext.instances[0].nodes.length > 0, true);
 
+    const correctNodeCount = FakeAudioContext.instances[0].nodes.length;
+    assert.equal(controller.play(SOUND_TYPES.comboCorrect), true);
+    assert.equal(FakeAudioContext.instances[0].nodes.length > correctNodeCount * 2, true);
+
     assert.equal(controller.toggleMuted(), true);
     assert.equal(controller.play(SOUND_TYPES.clear), false);
     assert.equal(controller.isMuted(), true);
